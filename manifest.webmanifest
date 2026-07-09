@@ -1,0 +1,9 @@
+{
+  "name": "GoPMaS POS",
+  "short_name": "GoPMaS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#FAF6EC",
+  "theme_color": "#B08D2E",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

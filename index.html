@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#B08D2E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<title>GoPMaS POS</title>
+<style>
+  :root {
+    --cream:#FAF6EC; --card:#FFF; --ink:#2B2415; --muted:#8A7F65; --line:#E8DFC8;
+    --gold:#B08D2E; --gold-dark:#8C6F1F; --frost:#4C93A6; --frost-soft:#E4F0F2;
+    --green:#3E7C4F; --red:#B3402E; --amber:#C08A2E;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; height:100%; overflow-x:hidden; }
+  body {
+    font-family:'Prompt','Sukhumvit Set','Leelawadee UI','Noto Sans Thai',system-ui,sans-serif;
+    background:var(--cream); color:var(--ink); font-size:16px;
+  }
+  .hidden { display:none !important; }
+  input, select, button { font-family:inherit; }
+  .app { padding-bottom:calc(66px + env(safe-area-inset-bottom)); }
+
+  header {
+    position:sticky; top:0; z-index:5; background:var(--cream); padding:14px 16px 10px;
+    border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px;
+  }
+  header h1 { font-size:17px; font-weight:600; margin:0; flex:1; }
+  header h1 small { color:var(--gold-dark); font-weight:500; }
+  .chip { font-size:12px; padding:4px 10px; border-radius:99px; border:1px solid var(--line); background:var(--card); color:var(--muted); white-space:nowrap; display:inline-flex; gap:5px; align-items:center; cursor:pointer; }
+  .chip.ok { color:var(--frost); border-color:color-mix(in srgb,var(--frost) 40%,transparent); background:var(--frost-soft); }
+  .chip.wait { color:var(--amber); border-color:var(--amber); }
+  .dot { width:7px; height:7px; border-radius:99px; background:currentColor; }
+
+  main { padding:12px 16px; max-width:600px; margin:0 auto; }
+  .screen { display:none; } .screen.active { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:12px; }
+  .card h2 { font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--gold-dark); margin:0 0 10px; font-weight:600; }
+  label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  input[type=text], input[type=number], input[type=password], select {
+    width:100%; padding:10px 12px; font-size:16px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink);
+  }
+  input:focus, select:focus { outline:2px solid var(--gold); border-color:var(--gold); }
+  .btn { border:none; border-radius:12px; padding:12px 16px; font-size:16px; font-weight:600; cursor:pointer; width:100%; }
+  .btn-gold { background:linear-gradient(160deg,#C7A33B,var(--gold)); color:#fff; }
+  .btn-frost { background:var(--frost); color:#fff; }
+  .btn-ghost { background:transparent; border:1px solid var(--line); color:var(--ink); font-weight:500; }
+  .row { display:flex; gap:10px; } .row>* { flex:1; }
+  .note { font-size:13px; color:var(--muted); } .warn { color:var(--red); font-size:13px; }
+
+  /* ---------- login ---------- */
+  #login { min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:24px 22px calc(24px + env(safe-area-inset-bottom)); max-width:440px; margin:0 auto; }
+  .logo { width:76px; height:76px; border-radius:22px; background:var(--card); border:1px solid var(--line); display:grid; place-items:center; margin:0 auto 14px; box-shadow:0 10px 30px rgba(43,36,21,.10); }
+  #login h1 { text-align:center; font-size:24px; margin:0; }
+  #login .tag { text-align:center; color:var(--muted); font-size:13px; margin:4px 0 22px; }
+  .who { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 14px; }
+  .who .av { width:42px; height:42px; border-radius:99px; background:var(--frost-soft); color:var(--frost); display:grid; place-items:center; font-weight:700; }
+  .who .nm { font-weight:600; } .who .ln { font-size:12px; color:var(--muted); }
+  .who .chg { margin-left:auto; font-size:12px; color:var(--gold-dark); border:1px solid var(--line); border-radius:99px; padding:6px 11px; background:var(--cream); cursor:pointer; }
+  .linechip { display:inline-flex; align-items:center; gap:5px; background:var(--frost-soft); color:var(--frost); font-weight:600; padding:2px 8px; border-radius:8px; font-size:12px; }
+  .pin { display:flex; justify-content:center; gap:12px; margin:22px 0 16px; }
+  .pin i { width:15px; height:15px; border-radius:99px; border:2px solid var(--line); }
+  .pin i.f { background:var(--gold); border-color:var(--gold); }
+  .keys { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .keys button { padding:15px 0; font-size:22px; font-weight:600; border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--ink); cursor:pointer; font-variant-numeric:tabular-nums; }
+  .keys button:active { background:var(--gold); color:#fff; }
+  .keys button.blank { border:0; background:none; cursor:default; }
+  .adminlink { text-align:center; margin-top:16px; font-size:13px; color:var(--frost); background:none; border:0; cursor:pointer; width:100%; }
+  .picker { max-height:46vh; overflow-y:auto; margin-top:8px; }
+  .picker button { display:flex; width:100%; text-align:left; gap:10px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:8px; cursor:pointer; }
+  .picker button .av { width:34px; height:34px; border-radius:99px; background:var(--frost-soft); color:var(--frost); display:grid; place-items:center; font-weight:700; font-size:14px; }
+  .picker button .nm { font-weight:500; } .picker button small { color:var(--muted); }
+  .loginerr { color:var(--red); text-align:center; font-size:13px; min-height:18px; margin-top:8px; }
+
+  /* ---------- challenge ---------- */
+  .challenge { background:linear-gradient(135deg,var(--frost-soft),var(--card)); border:1px solid color-mix(in srgb,var(--frost) 35%,var(--line)); border-radius:16px; padding:13px 15px; margin-bottom:12px; position:relative; overflow:hidden; }
+  .challenge::after { content:"🏆"; position:absolute; right:12px; top:10px; font-size:22px; opacity:.5; }
+  .challenge .eb { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--frost); font-weight:700; }
+  .challenge .amt { font-size:25px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--gold-dark); line-height:1.15; }
+  .challenge .amt small { font-size:12px; color:var(--muted); font-weight:400; }
+  .challenge .prods { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .challenge .prods span { font-size:11px; background:var(--card); border:1px solid var(--line); border-radius:7px; padding:2px 8px; font-variant-numeric:tabular-nums; }
+  .challenge .bar { height:6px; border-radius:99px; background:var(--line); margin-top:9px; overflow:hidden; }
+  .challenge .bar i { display:block; height:100%; background:linear-gradient(90deg,var(--frost),var(--gold)); border-radius:99px; }
+  .challenge .now { font-size:11px; color:var(--muted); margin-top:4px; display:flex; justify-content:space-between; }
+
+  /* ---------- customers ---------- */
+  #search { margin-bottom:10px; }
+  .cust { display:flex; align-items:center; gap:11px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:8px; cursor:pointer; }
+  .cust .ord { width:24px; height:24px; border-radius:99px; background:var(--cream); color:var(--muted); font-size:12px; display:grid; place-items:center; font-variant-numeric:tabular-nums; flex:none; }
+  .cust .nm { flex:1; font-weight:500; }
+  .cust .usual { font-size:11px; color:var(--muted); }
+  .cust .amt { font-weight:700; font-variant-numeric:tabular-nums; }
+  .cust .amt.g { color:var(--green); } .cust .amt.o { color:var(--red); } .cust .amt.m { color:var(--muted); font-weight:400; }
+  .cust.done { background:color-mix(in srgb,var(--gold) 7%,var(--card)); border-color:color-mix(in srgb,var(--gold) 35%,var(--line)); }
+  .cust.done .ord { background:var(--gold); color:#fff; }
+
+  /* ---------- modal ---------- */
+  #modal { display:none; position:fixed; inset:0; z-index:20; background:rgba(43,36,21,.45); }
+  #modal.open { display:flex; align-items:flex-end; justify-content:center; }
+  #modal .sheet { background:var(--cream); width:100%; max-width:600px; max-height:94vh; overflow-y:auto; overflow-x:hidden; border-radius:20px 20px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .prod-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px dashed var(--line); }
+  .prod-row .pn { flex:1; min-width:90px; }
+  .prod-row .pn small { color:var(--muted); display:block; font-size:12px; }
+  .prod-row .pn .tag { font-size:10px; color:var(--frost); background:var(--frost-soft); padding:1px 6px; border-radius:6px; margin-left:6px; }
+  .qty { display:flex; align-items:center; gap:8px; flex:none; }
+  .qty button { width:44px; height:44px; font-size:20px; border-radius:11px; background:#fff; border:1px solid var(--line); color:var(--gold-dark); }
+  .qty input { width:60px; text-align:center; font-size:18px; font-weight:700; height:44px; flex:none; font-variant-numeric:tabular-nums; }
+  .addbtn { width:100%; border:1px dashed var(--gold); background:color-mix(in srgb,var(--gold) 6%,transparent); color:var(--gold-dark); border-radius:12px; padding:11px; font-size:14px; font-weight:600; cursor:pointer; margin:12px 0; }
+  .extra { display:none; } .extra.show { display:block; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:11px; overflow:hidden; margin-top:4px; }
+  .seg button { flex:1; padding:11px; border:0; background:#fff; color:var(--muted); font-size:15px; cursor:pointer; }
+  .seg button.on { background:var(--gold); color:#fff; font-weight:600; }
+  .totline { display:flex; justify-content:space-between; padding:5px 0; font-size:15px; }
+  .totline b { font-variant-numeric:tabular-nums; }
+  .totline.big { border-top:1px solid var(--line); margin-top:8px; padding-top:10px; font-size:17px; }
+
+  /* ---------- tables ---------- */
+  table.mini { width:100%; border-collapse:collapse; font-size:14px; }
+  .mini th, .mini td { padding:6px 3px; text-align:right; border-bottom:1px dashed var(--line); font-variant-numeric:tabular-nums; }
+  .mini th { font-size:11px; color:var(--muted); font-weight:500; }
+  .mini th:first-child, .mini td:first-child { text-align:left; }
+  .hint { font-size:11px; color:var(--muted); margin:8px 0 0; }
+  .sackline { display:flex; justify-content:space-between; padding:4px 0; font-size:14px; }
+  .sackline.tot { border-top:1px solid var(--line); margin-top:6px; padding-top:8px; font-weight:600; }
+  .sackline .warnv { color:var(--red); font-weight:700; font-variant-numeric:tabular-nums; }
+  .emp-tag { display:inline-block; padding:6px 14px; margin:3px 4px 3px 0; border-radius:99px; border:1px solid var(--line); background:#fff; font-size:14px; cursor:pointer; }
+  .emp-tag.on { background:var(--gold); color:#fff; border-color:var(--gold); }
+  .big-num { font-size:24px; font-weight:700; color:var(--gold-dark); font-variant-numeric:tabular-nums; }
+
+  /* ---------- admin monitor ---------- */
+  .mon-head { display:flex; gap:10px; margin-bottom:12px; }
+  .kpi { flex:1; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:11px 12px; }
+  .kpi .k { font-size:11px; color:var(--muted); } .kpi .v { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px; } .kpi .v.frost { color:var(--frost); }
+  .lineitem { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 13px; margin-bottom:9px; }
+  .lineitem .h { display:flex; align-items:center; gap:9px; margin-bottom:8px; }
+  .lineitem .badge { width:34px; height:34px; border-radius:10px; background:var(--cream); color:var(--gold-dark); font-weight:700; display:grid; place-items:center; font-size:13px; font-variant-numeric:tabular-nums; }
+  .lineitem .who2 { flex:1; } .lineitem .who2 b { font-size:14px; } .lineitem .who2 small { display:block; color:var(--muted); font-size:11px; }
+  .lineitem .foot { display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:12px; }
+  .lineitem .money { font-weight:700; font-variant-numeric:tabular-nums; font-size:15px; }
+  .synced { color:var(--frost); } .stale { color:var(--amber); } .offline { color:var(--muted); }
+
+  /* ---------- nav ---------- */
+  nav { position:fixed; bottom:0; left:0; right:0; z-index:10; display:flex; background:var(--card); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  nav button { flex:1; background:none; border:0; padding:10px 0 8px; font-size:12px; color:var(--muted); cursor:pointer; }
+  nav button .ic { display:block; font-size:20px; margin-bottom:2px; }
+  nav button.on { color:var(--gold-dark); font-weight:600; }
+
+  #report { display:none; }
+</style>
+</head>
+<body>
+
+<!-- ========== LOGIN ========== -->
+<section id="login">
+  <div class="logo">
+    <svg viewBox="0 0 100 100" width="50" height="50" aria-label="โลโก้นกแก้ว GoPMaS">
+      <g fill="none" stroke="#9C7418" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M54 82 L40 103 L55 95 Z" fill="#EFC63A"/>
+        <path d="M64 46 C48 38 30 32 19 29 C29 36 40 42 46 46 C36 47 30 50 27 54 C40 58 52 56 60 60 C67 56 69 50 64 46 Z" fill="#CB9C22"/>
+        <path d="M66 48 C51 48 45 63 49 78 C53 91 66 95 75 89 C84 83 84 65 79 57 C76 51 73 48 66 48 Z" fill="#EFC63A"/>
+        <circle cx="74" cy="40" r="17" fill="#CB9C22"/>
+        <path d="M74 23 A17 17 0 0 1 74 57 Z" fill="#EFC63A"/>
+        <path d="M88 40 C96 43 95 51 89 53 C86 49 86 45 83 44 Z" fill="#EFC63A"/>
+        <path d="M60 88 l-2 8 6 -3 z" fill="#EFC63A"/>
+      </g>
+      <path d="M63 37 Q68 31 73 37" fill="none" stroke="#3A2E12" stroke-width="2.6" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <h1>GoPMaS</h1>
+  <div class="tag" id="loginTag">ระบบขายหน้ารถ</div>
+
+  <!-- ต้องตั้งค่า URL ครั้งแรก -->
+  <div id="needCfg" class="hidden">
+    <div class="card">
+      <label>API URL (จาก Apps Script)</label>
+      <input type="text" id="firstUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <div style="height:10px"></div>
+      <button class="btn btn-gold" onclick="saveFirstUrl()">เชื่อมต่อ</button>
+      <p class="note" id="cfgMsg"></p>
+    </div>
+  </div>
+
+  <!-- เลือกพนักงาน -->
+  <div id="pickEmp" class="hidden">
+    <label>เลือกชื่อของคุณ</label>
+    <input type="text" id="empSearch" placeholder="🔍 ค้นหาชื่อ…" oninput="renderRoster()">
+    <div class="picker" id="rosterList"></div>
+    <button class="adminlink" onclick="showAdminLogin()">เข้าระบบแอดมิน (คุณโต้ง) →</button>
+  </div>
+
+  <!-- ใส่ PIN พนักงาน -->
+  <div id="empPin" class="hidden">
+    <div class="who">
+      <div class="av" id="pinAv"></div>
+      <div><div class="nm" id="pinName"></div><div class="ln" id="pinLine"></div></div>
+      <button class="chg" onclick="changeLine()">เปลี่ยนสาย</button>
+    </div>
+    <div class="tag" style="margin:16px 0 0">ใส่ PIN (4 ตัวท้ายเลขบัญชี)</div>
+    <div class="pin" id="pinDots"><i></i><i></i><i></i><i></i></div>
+    <div class="keys" id="pinKeys"></div>
+    <div class="loginerr" id="empErr"></div>
+    <button class="adminlink" onclick="backToPick()">← เลือกชื่อใหม่</button>
+  </div>
+
+  <!-- admin login -->
+  <div id="adminBox" class="hidden">
+    <div class="card">
+      <label>ชื่อผู้ใช้แอดมิน</label>
+      <input type="text" id="admUser" autocomplete="username">
+      <label>รหัสผ่าน</label>
+      <input type="password" id="admPin" autocomplete="current-password">
+      <div style="height:12px"></div>
+      <button class="btn btn-frost" onclick="doAdminLogin()">เข้าสู่ระบบ</button>
+      <div class="loginerr" id="admErr"></div>
+      <button class="adminlink" onclick="backToPick()">← กลับหน้าพนักงาน</button>
+    </div>
+  </div>
+</section>
+
+<!-- ========== APP ========== -->
+<div class="app hidden" id="app">
+  <header>
+    <h1>GoPMaS <small id="hSub"></small></h1>
+    <span class="chip" id="syncChip" onclick="syncQueue()">–</span>
+  </header>
+  <main>
+
+    <!-- ขาย -->
+    <section class="screen active" id="scr-sell">
+      <div id="challenge"></div>
+      <input type="text" id="search" placeholder="🔍 ค้นหาลูกค้า…" oninput="renderCustomers()">
+      <div id="custList"></div>
+      <button class="btn btn-ghost" onclick="openEntry(null)">＋ ลูกค้าจร / นอกรายชื่อ</button>
+    </section>
+
+    <!-- ปิดวัน -->
+    <section class="screen" id="scr-close">
+      <div class="card"><h2>พนักงานที่ไปวันนี้</h2><div id="empPick"></div></div>
+      <div class="card">
+        <h2>เบิก · ขาย · กรอก · คืน</h2>
+        <div class="row" style="margin-bottom:8px">
+          <button class="btn btn-ghost" style="padding:8px" onclick="loadWithdraw()">⟳ ดึงยอดเบิก</button>
+          <span class="note" id="wdStatus" style="flex:2"></span>
+        </div>
+        <table class="mini" id="stockTbl"></table>
+        <p class="hint">กรอก = เติมชดเชยน้ำแข็งที่ละลายให้เต็มพร้อมขาย · เบิก = ขาย + กรอก + คืน</p>
+      </div>
+      <div class="card">
+        <h2>เงิน</h2>
+        <div class="totline"><span>ลูกค้าจ่าย</span><b id="tCash">0</b></div>
+        <div class="totline"><span>เก็บหนี้เก่า</span><b id="tDebt">0</b></div>
+        <div class="totline"><span>ค้างใหม่วันนี้</span><b id="tOwed" style="color:var(--red)">0</b></div>
+        <div class="row"><div><label>เติมน้ำมัน</label><input type="number" id="inFuel" inputmode="numeric" oninput="renderSummary()"></div>
+          <div><label>เติมแก๊ส</label><input type="number" id="inGas" inputmode="numeric" oninput="renderSummary()"></div></div>
+        <div class="totline big"><span>ส่งเงินทั้งหมด</span><span class="big-num" id="tSend">0</span></div>
+        <div class="totline"><span>คอมมิชชั่น 5%</span><b id="tComm">0</b></div>
+        <label>ช่องทางส่งเงิน</label>
+        <div class="seg" id="paySeg"><button class="on" onclick="setSendMethod('โอนเข้าบัญชี')">โอนเข้าบัญชี</button><button onclick="setSendMethod('เงินสด')">เงินสด</button></div>
+        <p class="hint" id="payHint">โอนแล้วแนบใบนำฝากมากับใบรายงาน A4</p>
+      </div>
+      <div class="card">
+        <h2>กระสอบ</h2>
+        <div class="row"><div><label>ค้างเพิ่มวันนี้</label><input type="number" id="inSackAdd" inputmode="numeric" oninput="renderSummary()"></div>
+          <div><label>คืน (ส่งกลับโรง)</label><input type="number" id="inSackRet" inputmode="numeric" oninput="renderSummary()"></div></div>
+        <div class="sackline"><span>ค้างสุทธิวันนี้</span><b id="sackNet">0</b></div>
+      </div>
+      <button class="btn btn-gold" onclick="submitDay()">✓ ปิดวัน / ส่งรายงาน</button>
+      <div style="height:9px"></div>
+      <button class="btn btn-ghost" onclick="printReport()">🖨 พิมพ์รายงาน A4</button>
+      <p class="note" id="submitNote"></p>
+    </section>
+
+    <!-- มอนิเตอร์ (admin) -->
+    <section class="screen" id="scr-monitor">
+      <div class="mon-head">
+        <div class="kpi"><div class="k">ส่งเงินรวมวันนี้</div><div class="v" id="monTotal">–</div></div>
+        <div class="kpi"><div class="k">สายที่ยังวิ่ง</div><div class="v frost" id="monRunning">–</div></div>
+      </div>
+      <div class="row" style="margin-bottom:12px"><button class="btn btn-ghost" style="padding:8px" onclick="loadMonitor()">⟳ รีเฟรช</button><span class="note" id="monStatus" style="flex:2"></span></div>
+      <div id="monList"></div>
+    </section>
+
+    <!-- จัดการสาย (admin) -->
+    <section class="screen" id="scr-lines">
+      <div class="card">
+        <h2>เพิ่มสายใหม่</h2>
+        <div class="row"><div><label>รหัสสาย</label><input type="text" id="lnCode" placeholder="L10"></div>
+          <div style="flex:2"><label>โซน / เส้นทาง</label><input type="text" id="lnZone" placeholder="เช่น ตลาดเช้า"></div></div>
+        <label>พนักงานประจำ (คั่นด้วย ,)</label><input type="text" id="lnEmps" placeholder="เอ็ม, กิ๊ฟ">
+        <label>สินค้าที่ขาย</label><div id="lnProds" style="margin-top:4px"></div>
+        <div style="height:12px"></div>
+        <button class="btn btn-frost" onclick="doAddLine()">สร้างสาย</button>
+        <p class="note" id="lnMsg"></p>
+      </div>
+    </section>
+
+    <!-- จัดการสินค้า (admin) -->
+    <section class="screen" id="scr-products">
+      <div class="card">
+        <h2 id="pFormTitle">เพิ่มสินค้าใหม่</h2>
+        <div class="row"><div><label>รหัส (id)</label><input type="text" id="pId"></div>
+          <div style="flex:2"><label>ชื่อแสดง</label><input type="text" id="pName"></div></div>
+        <div class="row"><div><label>ราคากลาง</label><input type="number" id="pPrice" inputmode="numeric"></div>
+          <div><label>คอลัมน์ solddata</label><input type="text" id="pCol" placeholder="C–H / ว่าง"></div></div>
+        <label>ราคาขั้นบันได (min:ราคา, …)</label>
+        <input type="text" id="pTiers" placeholder="เช่น 1:15,12:13,24:12">
+        <p class="hint">เว้นว่าง = ราคาเดียว · ตัวอย่าง 1:15,12:13 = ซื้อ 1–11 ราคา 15, ตั้งแต่ 12 ราคา 13</p>
+        <div style="height:10px"></div>
+        <div class="row"><button class="btn btn-ghost" onclick="clearProdForm()" style="flex:1">ล้างฟอร์ม</button>
+          <button class="btn btn-frost" onclick="doSaveProduct()" style="flex:2">บันทึกสินค้า</button></div>
+        <p class="note" id="pMsg"></p>
+      </div>
+      <div class="card"><h2>สินค้าทั้งหมด</h2><div id="prodList"></div></div>
+    </section>
+
+    <!-- ตั้งค่า -->
+    <section class="screen" id="scr-cfg">
+      <div class="card"><h2>บัญชีที่ใช้งาน</h2>
+        <p class="note">ผู้ใช้ <b id="cfgUser"></b> · บทบาท <b id="cfgRole"></b> <span id="cfgLineWrap">· สาย <b id="cfgLine"></b></span></p>
+        <p class="note">ข้อมูล <b id="cfgTarget"></b> · วันที่ <b id="cfgDate"></b></p>
+        <button class="btn btn-ghost" onclick="logout()" style="color:var(--red)">ออกจากระบบ</button>
+      </div>
+      <div class="card"><h2>ข้อมูลวันนี้</h2>
+        <p class="note">รายการขาย <b id="cfgCount">0</b> ราย</p>
+        <button class="btn btn-ghost" onclick="refreshMaster()">⟳ โหลดข้อมูลลูกค้า/พนักงานใหม่</button>
+        <div style="height:8px"></div>
+        <button class="btn btn-ghost" onclick="clearDay()" style="color:var(--red)">ล้างข้อมูลขายวันนี้</button>
+      </div>
+    </section>
+  </main>
+
+  <nav id="nav"></nav>
+</div>
+
+<!-- ========== modal ขาย ========== -->
+<div id="modal" onclick="if(event.target===this)closeEntry()">
+  <div class="sheet">
+    <input type="text" id="mName" placeholder="ชื่อลูกค้า" style="font-weight:600;font-size:18px">
+    <div id="mUsual"></div>
+    <button class="addbtn" id="mAddBtn" onclick="showExtra()">＋ เพิ่มสินค้าอื่น</button>
+    <div class="extra" id="mExtra"></div>
+    <label>การจ่ายเงิน</label>
+    <div class="seg" id="mPay"><button onclick="setPay('เงินสด')">เงินสด</button><button onclick="setPay('เครดิต')">เครดิต (ค้าง)</button></div>
+    <div class="row"><div><label>จ่ายมาจริง</label><input type="number" id="mPaid" inputmode="numeric" oninput="mPaidTouched=true;renderEntryTotal()"></div>
+      <div><label>ชำระหนี้เก่า</label><input type="number" id="mDebt" inputmode="numeric" oninput="renderEntryTotal()"></div></div>
+    <div class="totline big"><span>ยอดสินค้า</span><b id="mTotal">0</b></div>
+    <div class="totline"><span>ค้าง</span><b id="mOwed" style="color:var(--red)">0</b></div>
+    <div style="height:8px"></div>
+    <div class="row"><button class="btn btn-ghost" onclick="deleteEntry()" style="color:var(--red);flex:1">ลบ</button>
+      <button class="btn btn-gold" onclick="saveEntry()" style="flex:2">บันทึก</button></div>
+  </div>
+</div>
+
+<div id="report"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
