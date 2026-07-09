@@ -18,7 +18,7 @@ var master = load(LS.master, { products:[], customers:[], roster:[] });
 var roster = load(LS.roster, { employees:[], lines:[] });
 var day = null;
 var editKey = null, mPaidTouched = false, payMode = 'เงินสด', modalCust = null;
-var selectedEmp = null, selectedLine = null, pinBuf = '';
+var pendingLogin = null, selectedLine = null, pinBuf = '';
 
 // ================= api =================
 function apiGet(action, params){
@@ -34,11 +34,11 @@ function apiPost(body){
 function boot(){
   if (!cfg.url){ showLoginStage('needCfg'); return; }
   if (session){ enterApp(); return; }
-  showLoginStage('pickEmp'); loadRoster();
+  showLoginStage('empPin'); loadRoster();
 }
 function showLoginStage(which){
   $('login').classList.remove('hidden'); $('app').classList.add('hidden');
-  ['needCfg','pickEmp','empPin','adminBox'].forEach(function(s){ showEl(s, s===which); });
+  ['needCfg','empPin','chooseName','confirmLine','adminBox'].forEach(function(s){ showEl(s, s===which); });
   $('loginTag').textContent = which==='needCfg' ? 'ตั้งค่าการเชื่อมต่อครั้งแรก' : 'ระบบขายหน้ารถ';
 }
 
@@ -49,50 +49,19 @@ function saveFirstUrl(){
   apiGet('ping').then(function(j){
     if (!j.ok) throw 'ตอบกลับผิดปกติ';
     $('cfgMsg').textContent = '✓ เชื่อมต่อสำเร็จ';
-    showLoginStage('pickEmp'); loadRoster();
+    showLoginStage('empPin'); loadRoster();
   }).catch(function(e){ $('cfgMsg').textContent = '✗ เชื่อมต่อไม่ได้: ' + e; });
 }
 
-// ---- roster / pick employee ----
+// ---- roster (ใช้เป็นรายชื่อสาย + รายชื่อพนักงานหน้าปิดวัน) ----
 function loadRoster(){
-  $('rosterList').innerHTML = '<p class="note">กำลังโหลด…</p>';
   apiGet('roster').then(function(j){
     if (!j.ok) throw j.error;
     roster = { employees:j.employees||[], lines:j.lines||[] }; save(LS.roster, roster);
-    renderRoster();
-  }).catch(function(e){
-    if (roster.employees.length) renderRoster();  // ใช้ cache
-    else $('rosterList').innerHTML = '<p class="warn">โหลดรายชื่อไม่ได้ ('+e+') ตรวจสัญญาณ/URL</p>';
-  });
+  }).catch(function(){});  // offline ใช้ cache เดิม
 }
-function renderRoster(){
-  var q = ($('empSearch').value||'').trim();
-  var list = roster.employees.filter(function(e){ return !q || e.name.indexOf(q)>=0; });
-  $('rosterList').innerHTML = list.map(function(e){
-    return '<button onclick="pickEmp(\''+e.name.replace(/'/g,"\\'")+'\')">'
-      + '<span class="av">'+ (e.name[0]||'?') +'</span>'
-      + '<span><span class="nm">'+e.name+'</span> <small>'+(e.line?('· '+e.line):'')+(e.spare?' · สแปร์':'')+'</small></span></button>';
-  }).join('') || '<p class="note">ไม่พบชื่อ</p>';
-}
-function pickEmp(name){
-  selectedEmp = roster.employees.filter(function(e){ return e.name===name; })[0] || { name:name, line:'' };
-  selectedLine = selectedEmp.line || (roster.lines[0]||'');
-  pinBuf = '';
-  $('pinAv').textContent = name[0]||'?';
-  $('pinName').textContent = name;
-  updatePinLine();
-  renderPinDots();
-  $('empErr').textContent = '';
-  showLoginStage('empPin');
-}
-function updatePinLine(){ $('pinLine').innerHTML = 'สายวันนี้ · <span class="linechip">❄ '+ (selectedLine||'—') +'</span>'; }
-function changeLine(){
-  if (!roster.lines.length){ alert('ยังไม่มีรายชื่อสาย'); return; }
-  var i = roster.lines.indexOf(selectedLine);
-  selectedLine = roster.lines[(i+1) % roster.lines.length];  // วนเลือกสายถัดไป
-  updatePinLine();
-}
-function backToPick(){ pinBuf=''; showLoginStage('pickEmp'); loadRoster(); }
+
+// ---- PIN-first login: ใส่ PIN อย่างเดียว ระบบหาคนให้ ----
 function renderPinDots(){ var d=$('pinDots').children; for (var i=0;i<4;i++) d[i].classList.toggle('f', i<pinBuf.length); }
 function buildPinPad(){
   var keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
@@ -108,27 +77,55 @@ function buildPinPad(){
     $('pinKeys').appendChild(b);
   });
 }
-function submitEmpPin(){
+function backToPin(){ pinBuf=''; renderPinDots(); $('empErr').textContent=''; showLoginStage('empPin'); }
+function submitEmpPin(name){
   $('empErr').textContent = 'กำลังตรวจสอบ…';
-  apiPost({ action:'loginEmployee', name:selectedEmp.name, pin:pinBuf }).then(function(j){
-    if (!j.ok){ $('empErr').textContent = j.error||'PIN ไม่ถูกต้อง'; pinBuf=''; renderPinDots(); return; }
-    session = { role:'employee', name:j.name, line:selectedLine||j.line||'', token:j.token };
-    save(LS.session, session); enterApp();
-  }).catch(function(e){ $('empErr').textContent = 'เชื่อมต่อไม่ได้ ('+e+')'; pinBuf=''; renderPinDots(); });
+  var body = { action:'loginEmployee', pin:pinBuf };
+  if (name) body.name = name;
+  apiPost(body).then(function(j){
+    if (j.choose){  // PIN ตรงหลายคน → เลือกชื่อ
+      $('candList').innerHTML = j.choose.map(function(n){
+        return '<button onclick="submitEmpPin(\''+n.replace(/'/g,"\\'")+'\')">'
+          + '<span class="av">'+(n[0]||'?')+'</span><span class="nm">'+n+'</span></button>';
+      }).join('');
+      showLoginStage('chooseName'); return;
+    }
+    if (!j.ok){ $('empErr').textContent = j.error||'PIN ไม่ถูกต้อง'; pinBuf=''; renderPinDots(); showLoginStage('empPin'); return; }
+    pendingLogin = { name:j.name, line:j.line||'', token:j.token };
+    selectedLine = j.line || (roster.lines[0]||'');
+    $('pinAv').textContent = j.name[0]||'?'; $('pinName').textContent = j.name;
+    updatePinLine();
+    showLoginStage('confirmLine');
+  }).catch(function(e){ $('empErr').textContent = 'เชื่อมต่อไม่ได้ ('+e+')'; pinBuf=''; renderPinDots(); showLoginStage('empPin'); });
+}
+function updatePinLine(){ $('pinLine').innerHTML = 'สายวันนี้ · <span class="linechip">❄ '+ (selectedLine||'—') +'</span>'; }
+function changeLine(){
+  if (!roster.lines.length){ alert('ยังไม่มีรายชื่อสาย'); return; }
+  var i = roster.lines.indexOf(selectedLine);
+  selectedLine = roster.lines[(i+1) % roster.lines.length];  // วนเลือกสายถัดไป
+  updatePinLine();
+}
+function startWork(){
+  if (!pendingLogin) { backToPin(); return; }
+  if (!selectedLine){ alert('ยังไม่มีสาย — ให้แอดมินเพิ่มสายก่อน'); return; }
+  session = { role:'employee', name:pendingLogin.name, line:selectedLine, token:pendingLogin.token };
+  save(LS.session, session); pinBuf=''; renderPinDots(); enterApp();
 }
 
-// ---- admin login ----
-function showAdminLogin(){ $('admErr').textContent=''; showLoginStage('adminBox'); }
+// ---- admin login: บัตร RFID / รหัส ----
+function showAdminLogin(){ $('admErr').textContent=''; $('admPin').value=''; showLoginStage('adminBox'); setTimeout(function(){ $('admPin').focus(); }, 100); }
 function doAdminLogin(){
   $('admErr').textContent = 'กำลังตรวจสอบ…';
-  apiPost({ action:'loginAdmin', user:$('admUser').value.trim(), pin:$('admPin').value }).then(function(j){
-    if (!j.ok){ $('admErr').textContent = j.error||'ไม่ถูกต้อง'; return; }
+  apiPost({ action:'loginAdmin', pin:$('admPin').value.trim() }).then(function(j){
+    if (!j.ok){ $('admErr').textContent = j.error||'ไม่ถูกต้อง'; $('admPin').value=''; return; }
     session = { role:'admin', name:j.name, token:j.token }; save(LS.session, session); enterApp();
   }).catch(function(e){ $('admErr').textContent = 'เชื่อมต่อไม่ได้ ('+e+')'; });
 }
 function logout(){
   if (!confirm('ออกจากระบบ?')) return;
-  localStorage.removeItem(LS.session); session=null; boot();
+  localStorage.removeItem(LS.session); session=null;
+  pinBuf=''; renderPinDots(); pendingLogin=null; $('admPin').value='';  // ล้างสถานะ login ทั้งหมด
+  boot();
 }
 
 // ================= enter app =================
@@ -140,6 +137,10 @@ function enterApp(){
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   var _d = load(LS.day(todayStr()), null);
   day = _d ? Object.assign(newDay(), _d) : newDay();  // เติมฟิลด์ใหม่ให้ day เก่าครบ (backward compatible)
+  // คนที่ login = ไปสายนี้วันนี้โดยอัตโนมัติ (เลือกเพิ่ม/เอาออกได้ในหน้าปิดวัน)
+  if (session.role==='employee' && day.employees.indexOf(session.name)<0){
+    day.employees.push(session.name); save(LS.day(day.date), day);
+  }
   $('hSub').textContent = session.role==='admin' ? '· แอดมิน' : '· ' + session.line + ' · ' + session.name;
   // nav
   var navs = NAVS[session.role];
@@ -220,10 +221,10 @@ function renderCustomers(){
   Object.keys(day.entries).forEach(function(n){ if (names.indexOf(n)<0) names.push(n); });
   var html = names.filter(function(n){ return !q || n.indexOf(q)>=0; }).map(function(n, i){
     var c = custByName(n), e = day.entries[n];
-    var ord = c ? c.order : '+';
+    var ord = (c && c.order && c.order < 999) ? c.order : (i+1);  // ไม่มีลำดับในชีต → ใช้ลำดับในลิสต์
     var usual = c && c.usual && c.usual.length ? '<div class="usual">'+ c.usual.map(pnameOf).join(' · ') +'</div>' : '';
     var amt = e ? (e.owed>0 ? '<span class="amt o">ค้าง '+fmt(e.owed)+'</span>' : '<span class="amt g">'+fmt(e.paid+e.paidDebt)+'</span>')
-                : '<span class="amt m">แตะ</span>';
+                : '';
     return '<div class="cust '+(e?'done':'')+'" onclick="openEntry(\''+n.replace(/'/g,"\\'")+'\')">'
       + '<div class="ord">'+ord+'</div><div style="flex:1"><div class="nm">'+n+'</div>'+usual+'</div>'+amt+'</div>';
   }).join('');
@@ -260,7 +261,7 @@ function prodRow(id, e, usual){
   return '<div class="prod-row"><span class="pn">'+p.name+(usual&&modalCust?' <span class="tag">ประจำ</span>':'')+tierTag
     +'<small id="pl-'+id+'">'+fmt(price)+' บาท</small></span>'
     +'<div class="qty"><button onclick="bump(\''+id+'\',-1)">−</button>'
-    +'<input type="number" inputmode="numeric" id="q-'+id+'" data-pid="'+id+'" value="'+(qty||'')+'" oninput="renderEntryTotal()">'
+    +'<input type="number" inputmode="numeric" min="0" id="q-'+id+'" data-pid="'+id+'" value="'+(qty||'')+'" oninput="renderEntryTotal()">'
     +'<button onclick="bump(\''+id+'\',1)">＋</button></div></div>';
 }
 function showExtra(){ $('mExtra').classList.add('show'); $('mAddBtn').style.display='none'; }
@@ -397,6 +398,13 @@ function syncQueue(){
     var qq = load(LS.queue,[]);
     if (!qq.length){ syncing=false; $('submitNote').textContent='✓ ส่งรายงานเข้าชีตแล้ว'; renderChip(0); return; }
     return apiPost(qq[0]).then(function(j){
+      if (!j.ok && j.fatal){  // เช่น พนักงานซ้ำสาย — ห้าม retry ให้ผู้ใช้แก้แล้วส่งใหม่
+        qq.shift(); save(LS.queue,qq); renderChip(qq.length);
+        syncing=false;
+        $('submitNote').textContent='✗ '+j.error+' — แก้รายชื่อพนักงานแล้วกดปิดวันใหม่';
+        alert('ส่งรายงานไม่ผ่าน: '+j.error);
+        return;
+      }
       if (!j.ok) throw j.error;
       if (j.warn) alert('ส่งสำเร็จ แต่: '+j.warn);
       qq.shift(); save(LS.queue,qq); renderChip(qq.length); return next();
@@ -553,7 +561,13 @@ function printReport(){
 }
 
 // ================= service worker + start =================
+// ตัวเลขทุกช่องห้ามติดลบ (capture ก่อน handler อื่นเห็นค่า)
+document.addEventListener('input', function(e){
+  var t = e.target;
+  if (t && t.type==='number' && t.value!=='' && Number(t.value)<0) t.value = 0;
+}, true);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 boot();
 buildPinPad();
+$('admPin').addEventListener('keydown', function(e){ if (e.key==='Enter') doAdminLogin(); }); // เครื่องอ่าน RFID พิมพ์รหัส+Enter
 syncQueue();
