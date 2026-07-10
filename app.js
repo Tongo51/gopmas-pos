@@ -17,7 +17,7 @@ var session = load(LS.session, null);
 var master = load(LS.master, { products:[], customers:[], roster:[] });
 var roster = load(LS.roster, { employees:[], lines:[] });
 var day = null;
-var editKey = null, mPaidTouched = false, payMode = 'เงินสด', modalCust = null;
+var editKey = null, payMode = 'เงินสด', modalCust = null;
 var pendingLogin = null, selectedLine = null, pinBuf = '';
 
 // ================= api =================
@@ -100,11 +100,15 @@ function submitEmpPin(name){
 }
 function updatePinLine(){ $('pinLine').innerHTML = 'สายวันนี้ · <span class="linechip">❄ '+ (selectedLine||'—') +'</span>'; }
 function changeLine(){
-  if (!roster.lines.length){ alert('ยังไม่มีรายชื่อสาย'); return; }
-  var i = roster.lines.indexOf(selectedLine);
-  selectedLine = roster.lines[(i+1) % roster.lines.length];  // วนเลือกสายถัดไป
-  updatePinLine();
+  if (!roster.lines.length){ alert('ยังไม่มีรายชื่อสาย — ให้แอดมินเพิ่มสายในชีต lines ก่อน'); return; }
+  // แสดงรายชื่อสายทั้งหมดให้แตะเลือก (เดิมใช้วิธีวนสายถัดไป — มีสายเดียวจะเหมือนปุ่มไม่ทำงาน)
+  var el = $('linePick');
+  el.innerHTML = roster.lines.map(function(l){
+    return '<span class="emp-tag '+(l===selectedLine?'on':'')+'" onclick="pickLine(\''+String(l).replace(/'/g,"\\'")+'\')">❄ '+l+'</span>';
+  }).join('');
+  el.classList.toggle('hidden');
 }
+function pickLine(l){ selectedLine=l; updatePinLine(); $('linePick').classList.add('hidden'); }
 function startWork(){
   if (!pendingLogin) { backToPin(); return; }
   if (!selectedLine){ alert('ยังไม่มีสาย — ให้แอดมินเพิ่มสายก่อน'); return; }
@@ -157,7 +161,7 @@ function go(id, btn){
   Array.prototype.forEach.call($('nav').children, function(b){ b.classList.remove('on'); });
   if (btn) btn.classList.add('on');
   if (id==='sell'){ renderChallenge(); renderCustomers(); }
-  if (id==='close') renderSummary();
+  if (id==='close'){ renderSummary(); loadWithdraw(); loadSackRet(); }  // ดึงเบิก+คืนกระสอบอัตโนมัติ
   if (id==='monitor') loadMonitor();
   if (id==='products') loadProducts();
   if (id==='lines') renderLineProducts();
@@ -237,7 +241,7 @@ function openEntry(name){
   editKey = name;
   var cust = name ? custByName(name) : null;
   var e = name ? day.entries[name] : null;
-  modalCust = cust; mPaidTouched = !!e;
+  modalCust = cust;
   $('mName').value = name||''; $('mName').readOnly = !!cust;
   var usualIds = cust ? cust.usual.slice() : master.products.map(function(p){return p.id;});
   // สินค้าที่เคยซื้อเพิ่มไว้ในบิลนี้ ให้ถือเป็นของประจำด้วย
@@ -248,9 +252,8 @@ function openEntry(name){
   $('mExtra').classList.remove('show');
   $('mAddBtn').style.display = extraIds.length ? '' : 'none';
   $('mAddBtn').textContent = '＋ เพิ่มสินค้าอื่น ('+ extraIds.map(pnameOf).join(' · ') +')';
-  setPay(e? e.payment : 'เงินสด', true);
-  $('mPaid').value = e ? e.paid : ''; $('mDebt').value = (e&&e.paidDebt)?e.paidDebt:'';
-  renderEntryTotal();
+  $('mDebt').value = (e&&e.paidDebt)?e.paidDebt:'';
+  setPay(e? e.payment : 'เงินสด');  // จ่ายมาจริงคำนวณอัตโนมัติใน renderEntryTotal
   $('modal').classList.add('open');
 }
 function prodRow(id, e, usual){
@@ -267,7 +270,7 @@ function prodRow(id, e, usual){
 function showExtra(){ $('mExtra').classList.add('show'); $('mAddBtn').style.display='none'; }
 function closeEntry(){ $('modal').classList.remove('open'); }
 function bump(id, d){ var el=$('q-'+id); el.value = Math.max(0,(Number(el.value)||0)+d)||''; renderEntryTotal(); }
-function setPay(mode, silent){ payMode=mode; Array.prototype.forEach.call($('mPay').children, function(b){ b.classList.toggle('on', b.textContent.indexOf(mode)===0); }); if(!silent){ mPaidTouched=false; renderEntryTotal(); } }
+function setPay(mode){ payMode=mode; Array.prototype.forEach.call($('mPay').children, function(b){ b.classList.toggle('on', b.textContent.indexOf(mode)===0); }); renderEntryTotal(); }
 function entryTotal(){
   var t=0;
   document.querySelectorAll('#modal .qty input').forEach(function(el){
@@ -282,16 +285,16 @@ function renderEntryTotal(){
     var q=Number(el.value)||0, p=productById(el.dataset.pid), lbl=$('pl-'+el.dataset.pid);
     if (lbl && p) lbl.textContent = fmt(unitPrice(modalCust, p, q||1)) + ' บาท';
   });
-  var t = entryTotal();
-  if (!mPaidTouched) $('mPaid').value = payMode==='เงินสด' ? (t||'') : 0;
-  var paid = Number($('mPaid').value)||0;
+  // เงินสด = จ่ายเต็มก้อน · เครดิต = ค้างเต็มก้อน — ไม่ให้แบ่งจ่าย ช่องจ่ายมาจริงแก้ไม่ได้
+  var t = entryTotal(), paid = payMode==='เงินสด' ? t : 0;
+  $('mPaid').value = paid||'';
   $('mTotal').textContent = fmt(t); $('mOwed').textContent = fmt(Math.max(0, t-paid));
 }
 function collectItems(){ var it={}; document.querySelectorAll('#modal .qty input').forEach(function(el){ var q=Number(el.value)||0; if(q>0) it[el.dataset.pid]=q; }); return it; }
 function saveEntry(){
   var name = $('mName').value.trim(); if (!name){ alert('ใส่ชื่อลูกค้าก่อน'); return; }
   var items = collectItems(), total = entryTotal();
-  var paid = Number($('mPaid').value)||0, paidDebt = Number($('mDebt').value)||0;
+  var paid = payMode==='เงินสด' ? total : 0, paidDebt = Number($('mDebt').value)||0;
   if (!total && !paidDebt){ deleteEntry(); return; }
   if (editKey && editKey!==name) delete day.entries[editKey];
   day.entries[name] = { items:items, total:total, paid:paid, paidDebt:paidDebt, owed:Math.max(0,total-paid), payment:payMode };
@@ -312,9 +315,11 @@ function totals(){
 function setSendMethod(m){ day.sendMethod=m; Array.prototype.forEach.call($('paySeg').children,function(b){ b.classList.toggle('on', b.textContent===m); });
   $('payHint').textContent = m==='โอนเข้าบัญชี' ? 'โอนแล้วแนบใบนำฝากมากับใบรายงาน A4' : 'ส่งเงินสดพร้อมใบรายงาน'; saveDay(); }
 function renderSummary(){
-  ['inFuel:fuel','inGas:gas','inSackAdd:sackAdd','inSackRet:sackRet'].forEach(function(m){ var a=m.split(':'); day[a[1]]=$(a[0]).value; });
-  saveDay();
+  ['inFuel:fuel','inGas:gas'].forEach(function(m){ var a=m.split(':'); day[a[1]]=$(a[0]).value; });
   var t = totals();
+  // กระสอบค้างเพิ่ม = หลอดใหญ่ + หลอดเล็ก + โม่ + (ซอง×7) จากยอดขายวันนี้ — คำนวณอัตโนมัติ
+  day.sackAdd = (t.sold['หลอดใหญ่']||0) + (t.sold['หลอดเล็ก']||0) + (t.sold['โม่']||0) + (t.sold['ซอง']||0)*7;
+  saveDay();
   // พนักงาน
   var emps = roster.employees.slice().sort(function(a,b){ return (a.line===session.line?0:1)-(b.line===session.line?0:1); });
   $('empPick').innerHTML = emps.map(function(e){
@@ -349,9 +354,22 @@ function loadWithdraw(){
       var p = master.products.filter(function(x){ return x.name===nm||x.id===nm; })[0];
       if (p) day.withdraw[p.id]=j.items[nm];
     });
-    saveDay(); renderSummary(); $('wdStatus').textContent='✓ ดึงแล้ว '+Object.keys(j.items).length+' รายการ';
-  }).catch(function(e){ $('wdStatus').textContent='✗ ดึงไม่ได้ (offline?) ใส่มือได้'; });
+    saveDay(); renderSummary(); $('wdStatus').textContent='✓ ดึงแล้ว '+Object.keys(j.items).length+' รายการ · '+new Date().toLocaleTimeString('th-TH');
+  }).catch(function(e){ $('wdStatus').textContent='✗ ดึงไม่ได้ (offline?) จะลองใหม่อัตโนมัติ'; });
 }
+// กระสอบคืนที่โรงงานรับไว้แล้ววันนี้ — ดึงจากชีต facdata อัตโนมัติ
+function loadSackRet(){
+  apiGet('sackret',{ line:session.line }).then(function(j){
+    if (!j.ok) throw j.error;
+    day.sackRet = j.total; saveDay();
+    $('inSackRet').value = j.total||'';
+    $('sackNet').textContent = fmt((Number(day.sackAdd)||0) - j.total);
+  }).catch(function(){});  // offline ใช้ค่าที่ดึงไว้ล่าสุด
+}
+// รีเฟรชเบิก+คืนกระสอบทุก 1 นาทีระหว่างเปิดหน้าปิดวัน
+setInterval(function(){
+  if (session && session.role==='employee' && $('scr-close').classList.contains('active')){ loadWithdraw(); loadSackRet(); }
+}, 60000);
 
 // ================= heartbeat (near-real-time) =================
 var hbTimer = null;
@@ -516,7 +534,7 @@ function renderCfg(){
   $('cfgTarget').textContent = (master.target==='prod'?'ฐานจริง (1zd1)':'ฐานทดสอบ');
   $('cfgDate').textContent=todayStr(); $('cfgCount').textContent=day?Object.keys(day.entries).length:0;
 }
-function clearDay(){ if(!confirm('ล้างข้อมูลขายวันนี้?'))return; day=newDay(); saveDay(); go('sell',$('nav').children[0]); }
+function clearDay(){ if(!confirm('ล้างข้อมูลขายวันนี้?\n(ลบเฉพาะรายการขายที่บันทึกในเครื่องนี้ — ไม่กระทบข้อมูลใน Google Sheet)'))return; day=newDay(); saveDay(); go('sell',$('nav').children[0]); }
 
 // ================= พิมพ์ A4 (Android-safe: หน้าเอกสารแยก) =================
 function reportHTML(){
@@ -525,6 +543,10 @@ function reportHTML(){
     if(!wd&&!s&&!g) return ''; return '<tr><td>'+p.name+'</td><td>'+fmt(wd)+'</td><td>'+fmt(s)+'</td><td>'+fmt(g)+'</td><td>'+fmt(wd-s-g)+'</td></tr>'; }).join('');
   var credit = Object.keys(day.entries).filter(function(k){return day.entries[k].owed>0;})
     .map(function(k){ return '<tr><td>'+k+'</td><td>'+fmt(day.entries[k].owed)+'</td></tr>'; }).join('') || '<tr><td colspan="2">— ไม่มี —</td></tr>';
+  var detail = Object.keys(day.entries).map(function(k){ var e=day.entries[k];
+    var items = master.products.filter(function(p){return e.items[p.id];}).map(function(p){return p.name+'×'+e.items[p.id];}).join(', ');
+    return '<tr><td>'+k+'</td><td style="text-align:left">'+items+'</td><td>'+fmt(e.total)+'</td><td>'+fmt(e.paid)+'</td><td>'+fmt(e.paidDebt)+'</td><td>'+fmt(e.owed)+'</td><td>'+(e.payment||'')+'</td></tr>';
+  }).join('') || '<tr><td colspan="7">— ไม่มี —</td></tr>';
   return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>รายงานขาย '+session.line+' '+day.date+'</title>'
     + '<style>@page{size:A4;margin:12mm}*{font-family:\'Sarabun\',\'Leelawadee UI\',sans-serif}body{color:#000;font-size:13px}'
     + 'h1{font-size:18px;margin:0 0 2px}.sub{color:#444;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-bottom:10px}'
@@ -544,6 +566,8 @@ function reportHTML(){
     + '<table><tr><th colspan="2">กระสอบ</th></tr><tr><td>ค้างเพิ่ม</td><td>'+fmt(day.sackAdd)+'</td></tr>'
     + '<tr><td>คืน</td><td>'+fmt(day.sackRet)+'</td></tr><tr><td>ค้างสุทธิ</td><td>'+fmt((Number(day.sackAdd)||0)-(Number(day.sackRet)||0))+'</td></tr></table>'
     + '</div></div>'
+    + '<table><tr><th colspan="7">รายละเอียดการซื้อรายลูกค้า</th></tr>'
+    + '<tr><th>ลูกค้า</th><th>รายการ</th><th>ยอด</th><th>จ่าย</th><th>ชำระหนี้เก่า</th><th>ค้าง</th><th>การจ่าย</th></tr>'+detail+'</table>'
     + '<div class="sub" style="margin-top:6px">'+(day.sendMethod==='โอนเข้าบัญชี'?'* แนบใบนำฝากธนาคารมากับรายงานนี้':'')+'</div>'
     + '<div class="sign"><div>ลงชื่อพนักงานขาย</div><div>ลงชื่อพนักงานโรงกระสอบ<br>(ยืนยันจำนวนกระสอบคืน)</div><div>ผู้รับเงิน</div></div>'
     + '</body></html>';

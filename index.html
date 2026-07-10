@@ -210,6 +210,7 @@
       <div><div class="nm" id="pinName"></div><div class="ln" id="pinLine"></div></div>
       <button class="chg" onclick="changeLine()">เปลี่ยนสาย</button>
     </div>
+    <div id="linePick" class="hidden" style="margin-top:10px;text-align:center"></div>
     <div style="height:16px"></div>
     <button class="btn btn-gold" onclick="startWork()">เริ่มงาน ❄</button>
     <button class="adminlink" onclick="backToPin()">← ไม่ใช่ฉัน / ใส่ PIN ใหม่</button>
@@ -250,7 +251,7 @@
       <div class="card">
         <h2>เบิก · ขาย · กรอก · คืน</h2>
         <div class="row" style="margin-bottom:8px">
-          <button class="btn btn-ghost" style="padding:8px" onclick="loadWithdraw()">⟳ ดึงยอดเบิก</button>
+          <button class="btn btn-ghost" style="padding:8px" onclick="loadWithdraw();loadSackRet()">⟳ รีเฟรชตอนนี้</button>
           <span class="note" id="wdStatus" style="flex:2"></span>
         </div>
         <table class="mini" id="stockTbl"></table>
@@ -271,9 +272,10 @@
       </div>
       <div class="card">
         <h2>กระสอบ</h2>
-        <div class="row"><div><label>ค้างเพิ่มวันนี้</label><input type="number" min="0" id="inSackAdd" inputmode="numeric" oninput="renderSummary()"></div>
-          <div><label>คืน (ส่งกลับโรง)</label><input type="number" min="0" id="inSackRet" inputmode="numeric" oninput="renderSummary()"></div></div>
+        <div class="row"><div><label>ค้างเพิ่มวันนี้ (อัตโนมัติ)</label><input type="number" min="0" id="inSackAdd" inputmode="numeric" readonly tabindex="-1" style="background:var(--cream)"></div>
+          <div><label>คืน — โรงงานรับไว้ (อัตโนมัติ)</label><input type="number" min="0" id="inSackRet" inputmode="numeric" readonly tabindex="-1" style="background:var(--cream)"></div></div>
         <div class="sackline"><span>ค้างสุทธิวันนี้</span><b id="sackNet">0</b></div>
+        <p class="hint">ค้างเพิ่ม = หลอดใหญ่ + หลอดเล็ก + โม่ + (ซอง×7) · คืนดึงจากบันทึกโรงงาน (facdata)</p>
       </div>
       <button class="btn btn-gold" onclick="submitDay()">✓ ปิดวัน / ส่งรายงาน</button>
       <div style="height:9px"></div>
@@ -352,7 +354,7 @@
     <div class="extra" id="mExtra"></div>
     <label>การจ่ายเงิน</label>
     <div class="seg" id="mPay"><button onclick="setPay('เงินสด')">เงินสด</button><button onclick="setPay('เครดิต')">เครดิต (ค้าง)</button></div>
-    <div class="row"><div><label>จ่ายมาจริง</label><input type="number" min="0" id="mPaid" inputmode="numeric" oninput="mPaidTouched=true;renderEntryTotal()"></div>
+    <div class="row"><div><label>จ่ายมาจริง (อัตโนมัติ)</label><input type="number" min="0" id="mPaid" inputmode="numeric" readonly tabindex="-1" style="background:var(--cream)"></div>
       <div><label>ชำระหนี้เก่า</label><input type="number" min="0" id="mDebt" inputmode="numeric" oninput="renderEntryTotal()"></div></div>
     <div class="totline big"><span>ยอดสินค้า</span><b id="mTotal">0</b></div>
     <div class="totline"><span>ค้าง</span><b id="mOwed" style="color:var(--red)">0</b></div>
