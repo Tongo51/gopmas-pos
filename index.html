@@ -149,6 +149,13 @@
   nav button.on { color:var(--gold-dark); font-weight:600; }
 
   #report { display:none; }
+
+  /* ---------- toast (แทน alert) ---------- */
+  #toast { position:fixed; left:50%; bottom:calc(76px + env(safe-area-inset-bottom)); transform:translate(-50%,10px);
+    background:var(--ink); color:var(--cream); padding:10px 18px; border-radius:99px; font-size:14px;
+    opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; z-index:30;
+    max-width:86vw; text-align:center; box-shadow:0 8px 24px rgba(43,36,21,.25); }
+  #toast.show { opacity:1; transform:translate(-50%,0); }
 </style>
 </head>
 <body>
@@ -279,7 +286,7 @@
         <div class="sackline tot"><span>ค้างสะสมรวม</span><b id="sackTotal">0</b></div>
         <p class="hint">ค้างเพิ่ม = หลอดใหญ่ + หลอดเล็ก + โม่ + (ซอง×7) · คืนดึงจากบันทึกโรงงาน (facdata)</p>
       </div>
-      <button class="btn btn-gold" onclick="submitDay()">✓ ปิดวัน / ส่งรายงาน</button>
+      <button class="btn btn-gold" onclick="submitDay(this)">✓ ปิดวัน / ส่งรายงาน</button>
       <div style="height:9px"></div>
       <button class="btn btn-ghost" onclick="printReport()">🖨 พิมพ์รายงาน A4</button>
       <p class="note" id="submitNote"></p>
@@ -333,13 +340,13 @@
       <div class="card"><h2>บัญชีที่ใช้งาน</h2>
         <p class="note">ผู้ใช้ <b id="cfgUser"></b> · บทบาท <b id="cfgRole"></b> <span id="cfgLineWrap">· สาย <b id="cfgLine"></b></span></p>
         <p class="note">ข้อมูล <b id="cfgTarget"></b> · วันที่ <b id="cfgDate"></b></p>
-        <button class="btn btn-ghost" onclick="logout()" style="color:var(--red)">ออกจากระบบ</button>
+        <button class="btn btn-ghost" onclick="logout(this)" style="color:var(--red)">ออกจากระบบ</button>
       </div>
       <div class="card"><h2>ข้อมูลวันนี้</h2>
         <p class="note">รายการขาย <b id="cfgCount">0</b> ราย</p>
         <button class="btn btn-ghost" onclick="refreshMaster()">⟳ โหลดข้อมูลลูกค้า/พนักงานใหม่</button>
         <div style="height:8px"></div>
-        <button class="btn btn-ghost" onclick="clearDay()" style="color:var(--red)">ล้างข้อมูลขายวันนี้</button>
+        <button class="btn btn-ghost" onclick="clearDay(this)" style="color:var(--red)">ล้างข้อมูลขายวันนี้</button>
       </div>
     </section>
   </main>
@@ -367,6 +374,7 @@
 </div>
 
 <div id="report"></div>
+<div id="toast"></div>
 
 <script src="app.js"></script>
 </body>

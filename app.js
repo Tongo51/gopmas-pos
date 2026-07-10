@@ -8,6 +8,18 @@ function fmt(n){ return (Number(n)||0).toLocaleString('th-TH'); }
 function todayStr(){ var d=new Date(); return d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear(); }
 function $(id){ return document.getElementById(id); }
 function showEl(id, on){ $(id).classList.toggle('hidden', !on); }
+// แจ้งเตือนแบบไม่บล็อก (แทน alert ของเบราว์เซอร์ — พนักงานไม่ต้องกดตกลง)
+function toast(msg){
+  var t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+}
+// ยืนยันแบบแตะซ้ำ (แทน confirm): แตะแรกเปลี่ยนข้อความปุ่ม แตะซ้ำใน 4 วิ = ยืนยัน
+function arm(btn, label, fn){
+  if (btn.dataset.armed){ delete btn.dataset.armed; btn.textContent = btn.dataset.orig; clearTimeout(arm._t); fn(); return; }
+  btn.dataset.orig = btn.textContent; btn.dataset.armed = '1'; btn.textContent = label;
+  clearTimeout(arm._t);
+  arm._t = setTimeout(function(){ if (btn.dataset.armed){ delete btn.dataset.armed; btn.textContent = btn.dataset.orig; } }, 4000);
+}
 
 // URL ค่าตั้งต้น — พนักงานเปิดแอปแล้วล็อกอินได้เลย ไม่ต้องกรอกเอง (เปลี่ยนได้ในหน้าตั้งค่า)
 var DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbzI4QLD2rqskgPwq64jxdToU0xvg0qCXiohDIJWiwSCV2FAgUtXN_knRaIdQQTGu35n/exec';
@@ -100,7 +112,7 @@ function submitEmpPin(name){
 }
 function updatePinLine(){ $('pinLine').innerHTML = 'สายวันนี้ · <span class="linechip">❄ '+ (selectedLine||'—') +'</span>'; }
 function changeLine(){
-  if (!roster.lines.length){ alert('ยังไม่มีรายชื่อสาย — ให้แอดมินเพิ่มสายในชีต lines ก่อน'); return; }
+  if (!roster.lines.length){ toast('ยังไม่มีรายชื่อสาย — ให้แอดมินเพิ่มสายในชีต lines ก่อน'); return; }
   // แสดงรายชื่อสายทั้งหมดให้แตะเลือก (เดิมใช้วิธีวนสายถัดไป — มีสายเดียวจะเหมือนปุ่มไม่ทำงาน)
   var el = $('linePick');
   el.innerHTML = roster.lines.map(function(l){
@@ -111,7 +123,7 @@ function changeLine(){
 function pickLine(l){ selectedLine=l; updatePinLine(); $('linePick').classList.add('hidden'); }
 function startWork(){
   if (!pendingLogin) { backToPin(); return; }
-  if (!selectedLine){ alert('ยังไม่มีสาย — ให้แอดมินเพิ่มสายก่อน'); return; }
+  if (!selectedLine){ toast('ยังไม่มีสาย — ให้แอดมินเพิ่มสายก่อน'); return; }
   session = { role:'employee', name:pendingLogin.name, line:selectedLine, token:pendingLogin.token };
   save(LS.session, session); pinBuf=''; renderPinDots(); enterApp();
 }
@@ -125,11 +137,12 @@ function doAdminLogin(){
     session = { role:'admin', name:j.name, token:j.token }; save(LS.session, session); enterApp();
   }).catch(function(e){ $('admErr').textContent = 'เชื่อมต่อไม่ได้ ('+e+')'; });
 }
-function logout(){
-  if (!confirm('ออกจากระบบ?')) return;
-  localStorage.removeItem(LS.session); session=null;
-  pinBuf=''; renderPinDots(); pendingLogin=null; $('admPin').value='';  // ล้างสถานะ login ทั้งหมด
-  boot();
+function logout(btn){
+  arm(btn, 'แตะอีกครั้ง เพื่อออกจากระบบ', function(){
+    localStorage.removeItem(LS.session); session=null;
+    pinBuf=''; renderPinDots(); pendingLogin=null; $('admPin').value='';  // ล้างสถานะ login ทั้งหมด
+    boot();
+  });
 }
 
 // ================= enter app =================
@@ -179,7 +192,7 @@ function refreshMaster(silent){
     if (!j.ok) throw j.error;
     master = j; master.line = session.line; save(LS.master, master);
     renderChallenge(); renderCustomers();
-  }).catch(function(e){ if(!silent) alert('โหลดข้อมูลไม่ได้: '+e+' (ใช้ข้อมูลเดิม)'); });
+  }).catch(function(e){ if(!silent) toast('โหลดข้อมูลไม่ได้: '+e+' (ใช้ข้อมูลเดิม)'); });
   apiGet('lastyear', { line:session.line }).then(function(j){
     if (j.ok){ save(LS.lastyear+'.'+todayStr(), j); renderChallenge(); }
   }).catch(function(){});
@@ -292,7 +305,7 @@ function renderEntryTotal(){
 }
 function collectItems(){ var it={}; document.querySelectorAll('#modal .qty input').forEach(function(el){ var q=Number(el.value)||0; if(q>0) it[el.dataset.pid]=q; }); return it; }
 function saveEntry(){
-  var name = $('mName').value.trim(); if (!name){ alert('ใส่ชื่อลูกค้าก่อน'); return; }
+  var name = $('mName').value.trim(); if (!name){ toast('ใส่ชื่อลูกค้าก่อน'); return; }
   var items = collectItems(), total = entryTotal();
   var paid = payMode==='เงินสด' ? total : 0, paidDebt = Number($('mDebt').value)||0;
   if (!total && !paidDebt){ deleteEntry(); return; }
@@ -396,13 +409,14 @@ function buildPayload(){
     sackAdd:Number(day.sackAdd)||0, sackRet:Number(day.sackRet)||0 };
     // ไม่ส่งรายบิลรายลูกค้า — หนี้บันทึกเป็นยอดรวมสาย/วันฝั่ง server, รายละเอียดอยู่ในใบ A4
 }
-function submitDay(){
-  if (!day.employees.length){ alert('เลือกพนักงานที่ไปวันนี้ก่อน'); return; }
-  if (!Object.keys(day.entries).length){ alert('ยังไม่มีรายการขาย'); return; }
-  if (!confirm('ยืนยันปิดวัน ส่งเงิน '+fmt(totals().send)+' บาท?')) return;
-  var q = load(LS.queue,[]); q.push(buildPayload()); save(LS.queue,q);
-  $('submitNote').textContent = 'เข้าคิวส่งแล้ว — ถ้าไม่มีสัญญาณจะส่งเองเมื่อออนไลน์';
-  syncQueue();
+function submitDay(btn){
+  if (!day.employees.length){ toast('เลือกพนักงานที่ไปวันนี้ก่อน'); return; }
+  if (!Object.keys(day.entries).length){ toast('ยังไม่มีรายการขาย'); return; }
+  arm(btn, 'แตะอีกครั้ง · ยืนยันส่งเงิน '+fmt(totals().send)+' บาท', function(){
+    var q = load(LS.queue,[]); q.push(buildPayload()); save(LS.queue,q);
+    $('submitNote').textContent = 'เข้าคิวส่งแล้ว — ถ้าไม่มีสัญญาณจะส่งเองเมื่อออนไลน์';
+    syncQueue();
+  });
 }
 var syncing=false;
 function syncQueue(){
@@ -418,11 +432,11 @@ function syncQueue(){
         qq.shift(); save(LS.queue,qq); renderChip(qq.length);
         syncing=false;
         $('submitNote').textContent='✗ '+j.error+' — แก้รายชื่อพนักงานแล้วกดปิดวันใหม่';
-        alert('ส่งรายงานไม่ผ่าน: '+j.error);
+        toast('ส่งรายงานไม่ผ่าน: '+j.error);
         return;
       }
       if (!j.ok) throw j.error;
-      if (j.warn) alert('ส่งสำเร็จ แต่: '+j.warn);
+      if (j.warn) toast('ส่งสำเร็จ แต่: '+j.warn);
       qq.shift(); save(LS.queue,qq); renderChip(qq.length); return next();
     }).catch(function(e){ syncing=false; $('submitNote').textContent='ยังส่งไม่สำเร็จ จะลองใหม่ ('+e+')'; });
   })();
@@ -470,7 +484,7 @@ function renderLineProducts(){
 }
 function toggleLineProd(id){ lineProdSel[id]=!lineProdSel[id]; renderLineProducts(); }
 function doAddLine(){
-  var code=$('lnCode').value.trim(); if (!code){ alert('ใส่รหัสสาย'); return; }
+  var code=$('lnCode').value.trim(); if (!code){ toast('ใส่รหัสสาย'); return; }
   var prods = Object.keys(lineProdSel).filter(function(k){ return lineProdSel[k]; });
   $('lnMsg').textContent='กำลังสร้าง…';
   apiPost({ action:'addLine', line:code, zone:$('lnZone').value.trim(),
@@ -497,7 +511,7 @@ function renderProducts(){
       + '<div style="flex:1"><div class="nm">'+p.name+(p.active?'':' <span style="color:var(--muted)">(ปิด)</span>')+'</div>'
       + '<div class="usual">'+priceTxt+(p.col?(' · คอลัมน์ '+p.col):'')+'</div></div>'
       + '<button class="emp-tag" onclick="editProduct(\''+p.id.replace(/'/g,"\\'")+'\')">แก้ไข</button>'
-      + '<button class="emp-tag" style="color:var(--red)" onclick="doDeleteProduct(\''+p.id.replace(/'/g,"\\'")+'\')">ลบ</button></div>';
+      + '<button class="emp-tag" style="color:var(--red)" onclick="doDeleteProduct(\''+p.id.replace(/'/g,"\\'")+'\',this)">ลบ</button></div>';
   }).join('') || '<p class="note">ยังไม่มีสินค้า</p>';
 }
 function editProduct(id){
@@ -512,17 +526,18 @@ function clearProdForm(){
   ['pId','pName','pPrice','pCol','pTiers'].forEach(function(i){ $(i).value=''; }); $('pMsg').textContent='';
 }
 function doSaveProduct(){
-  var id=$('pId').value.trim(); if(!id){ alert('ใส่รหัสสินค้า'); return; }
+  var id=$('pId').value.trim(); if(!id){ toast('ใส่รหัสสินค้า'); return; }
   $('pMsg').textContent='กำลังบันทึก…';
   apiPost({ action:'saveProduct', id:id, origId:editingProdId, name:$('pName').value.trim(),
     price:Number($('pPrice').value)||0, col:$('pCol').value.trim(), tiers:$('pTiers').value.trim() })
   .then(function(j){ if(!j.ok) throw j.error; $('pMsg').textContent='✓ บันทึกแล้ว'; clearProdForm(); loadProducts(); refreshMaster(true); })
   .catch(function(e){ $('pMsg').textContent='✗ '+e; });
 }
-function doDeleteProduct(id){
-  if(!confirm('ลบสินค้า '+id+'?')) return;
-  apiPost({ action:'deleteProduct', id:id }).then(function(j){ if(!j.ok) throw j.error; loadProducts(); refreshMaster(true); })
-  .catch(function(e){ alert('ลบไม่ได้: '+e); });
+function doDeleteProduct(id, btn){
+  arm(btn, 'แตะอีกครั้ง ยืนยันลบ', function(){
+    apiPost({ action:'deleteProduct', id:id }).then(function(j){ if(!j.ok) throw j.error; loadProducts(); refreshMaster(true); })
+    .catch(function(e){ toast('ลบไม่ได้: '+e); });
+  });
 }
 
 // ================= settings =================
@@ -532,7 +547,12 @@ function renderCfg(){
   $('cfgTarget').textContent = (master.target==='prod'?'ฐานจริง (1zd1)':'ฐานทดสอบ');
   $('cfgDate').textContent=todayStr(); $('cfgCount').textContent=day?Object.keys(day.entries).length:0;
 }
-function clearDay(){ if(!confirm('ล้างข้อมูลขายวันนี้?\n(ลบเฉพาะรายการขายที่บันทึกในเครื่องนี้ — ไม่กระทบข้อมูลใน Google Sheet)'))return; day=newDay(); saveDay(); go('sell',$('nav').children[0]); }
+function clearDay(btn){
+  arm(btn, 'แตะอีกครั้ง ยืนยันล้าง (เฉพาะเครื่องนี้)', function(){
+    day=newDay(); saveDay(); toast('ล้างข้อมูลขายในเครื่องแล้ว — ไม่กระทบ Google Sheet');
+    go('sell',$('nav').children[0]);
+  });
+}
 
 // ================= พิมพ์ A4 (Android-safe: หน้าเอกสารแยก) =================
 function reportHTML(){
