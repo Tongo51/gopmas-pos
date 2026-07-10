@@ -389,14 +389,10 @@ function buildPayload(){
   return { action:'submit',
     txId:'TX'+day.date.replace(/\//g,'')+'-'+session.line+'-'+Date.now(),
     date:day.date, line:session.line, employees:day.employees,
-    sold:t.sold, moneySent:t.send, fuelTotal:t.fuel+t.gas, cash:t.cash, owed:t.owed,
+    sold:t.sold, moneySent:t.send, fuelTotal:t.fuel+t.gas, cash:t.cash, owed:t.owed, debtPaid:t.debt,
     customers:Object.keys(day.entries).length, sendMethod:day.sendMethod,
-    sackAdd:Number(day.sackAdd)||0, sackRet:Number(day.sackRet)||0,
-    details:Object.keys(day.entries).map(function(name){ var e=day.entries[name];
-      return { customer:name, payment:e.payment,
-        items:master.products.filter(function(p){return e.items[p.id];}).map(function(p){return p.id+'×'+e.items[p.id];}).join(', '),
-        total:e.total, paid:e.paid, owed:e.owed, paidDebt:e.paidDebt };
-    }) };
+    sackAdd:Number(day.sackAdd)||0, sackRet:Number(day.sackRet)||0 };
+    // ไม่ส่งรายบิลรายลูกค้า — หนี้บันทึกเป็นยอดรวมสาย/วันฝั่ง server, รายละเอียดอยู่ในใบ A4
 }
 function submitDay(){
   if (!day.employees.length){ alert('เลือกพนักงานที่ไปวันนี้ก่อน'); return; }
