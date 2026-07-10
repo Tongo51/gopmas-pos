@@ -187,7 +187,7 @@ function refreshMaster(silent){
 
 // ================= day state =================
 function newDay(){ return { date:todayStr(), entries:{}, employees:[], withdraw:{}, grokk:{},
-  fuel:'', gas:'', sackAdd:'', sackRet:'', sendMethod:'โอนเข้าบัญชี' }; }
+  fuel:'', gas:'', sackAdd:'', sackRet:'', sackCarry:0, sendMethod:'โอนเข้าบัญชี' }; }
 function saveDay(){ save(LS.day(day.date), day); scheduleHeartbeat(); }
 
 // ================= sell: challenge =================
@@ -340,7 +340,10 @@ function renderSummary(){
   $('tSend').textContent=fmt(t.send);
   var n = day.employees.length||1;
   $('tComm').textContent = fmt(Math.round(t.send*0.05/n))+' /คน ('+n+' คน)';
-  $('sackNet').textContent = fmt((Number(day.sackAdd)||0)-(Number(day.sackRet)||0));
+  var sackNet = (Number(day.sackAdd)||0)-(Number(day.sackRet)||0);
+  $('sackCarry').textContent = fmt(day.sackCarry);
+  $('sackNet').textContent = fmt(sackNet);
+  $('sackTotal').textContent = fmt((Number(day.sackCarry)||0) + sackNet);
   $('inFuel').value=day.fuel; $('inGas').value=day.gas; $('inSackAdd').value=day.sackAdd; $('inSackRet').value=day.sackRet;
   setSendMethod(day.sendMethod||'โอนเข้าบัญชี');
 }
@@ -357,13 +360,12 @@ function loadWithdraw(){
     saveDay(); renderSummary(); $('wdStatus').textContent='✓ ดึงแล้ว '+Object.keys(j.items).length+' รายการ · '+new Date().toLocaleTimeString('th-TH');
   }).catch(function(e){ $('wdStatus').textContent='✗ ดึงไม่ได้ (offline?) จะลองใหม่อัตโนมัติ'; });
 }
-// กระสอบคืนที่โรงงานรับไว้แล้ววันนี้ — ดึงจากชีต facdata อัตโนมัติ
+// กระสอบวันนี้: คืนที่โรงงานรับไว้ (facdata) + ค้างสะสมยกมา — ดึงอัตโนมัติ
 function loadSackRet(){
   apiGet('sackret',{ line:session.line }).then(function(j){
     if (!j.ok) throw j.error;
-    day.sackRet = j.total; saveDay();
-    $('inSackRet').value = j.total||'';
-    $('sackNet').textContent = fmt((Number(day.sackAdd)||0) - j.total);
+    day.sackRet = j.total; day.sackCarry = j.carry||0;
+    saveDay(); renderSummary();
   }).catch(function(){});  // offline ใช้ค่าที่ดึงไว้ล่าสุด
 }
 // รีเฟรชเบิก+คืนกระสอบทุก 1 นาทีระหว่างเปิดหน้าปิดวัน
@@ -535,6 +537,12 @@ function clearDay(){ if(!confirm('ล้างข้อมูลขายวั�
 // ================= พิมพ์ A4 (Android-safe: หน้าเอกสารแยก) =================
 function reportHTML(){
   var t=totals(), n=day.employees.length||1;
+  var ly = load(LS.lastyear+'.'+todayStr(), null);
+  var lyRows = (ly && ly.total)
+    ? '<tr><td>วันนี้เมื่อปีที่แล้ว ('+(ly.date||'')+')</td><td>'+fmt(ly.total)+'</td></tr>'
+      + '<tr><td>เทียบปีที่แล้ว</td><td>'+Math.round(t.send*100/ly.total)+'%</td></tr>'
+    : '';
+  var sackNet = (Number(day.sackAdd)||0)-(Number(day.sackRet)||0), sackCarry = Number(day.sackCarry)||0;
   var stock = master.products.map(function(p){ var wd=day.withdraw[p.id]||0, s=t.sold[p.id]||0, g=Number(day.grokk[p.id])||0;
     if(!wd&&!s&&!g) return ''; return '<tr><td>'+p.name+'</td><td>'+fmt(wd)+'</td><td>'+fmt(s)+'</td><td>'+fmt(g)+'</td><td>'+fmt(wd-s-g)+'</td></tr>'; }).join('');
   var credit = Object.keys(day.entries).filter(function(k){return day.entries[k].owed>0;})
@@ -558,9 +566,12 @@ function reportHTML(){
     + '<table><tr><th colspan="2">ลูกค้าค้างจ่ายวันนี้</th></tr>'+credit+'</table></div><div>'
     + '<table><tr><td>ลูกค้าจ่าย</td><td>'+fmt(t.cash)+'</td></tr><tr><td>เก็บหนี้เก่า</td><td>'+fmt(t.debt)+'</td></tr>'
     + '<tr><td>ค้างใหม่วันนี้</td><td>'+fmt(t.owed)+'</td></tr><tr><td>ค่าน้ำมัน+แก๊ส</td><td>'+fmt(t.fuel+t.gas)+'</td></tr>'
-    + '<tr><th>ส่งเงินทั้งหมด</th><th>'+fmt(t.send)+'</th></tr><tr><td>คอมมิชชั่น 5% ÷ '+n+' คน</td><td>'+fmt(Math.round(t.send*0.05/n))+' /คน</td></tr></table>'
-    + '<table><tr><th colspan="2">กระสอบ</th></tr><tr><td>ค้างเพิ่ม</td><td>'+fmt(day.sackAdd)+'</td></tr>'
-    + '<tr><td>คืน</td><td>'+fmt(day.sackRet)+'</td></tr><tr><td>ค้างสุทธิ</td><td>'+fmt((Number(day.sackAdd)||0)-(Number(day.sackRet)||0))+'</td></tr></table>'
+    + '<tr><th>ส่งเงินทั้งหมด</th><th>'+fmt(t.send)+'</th></tr>'+lyRows
+    + '<tr><td>คอมมิชชั่น 5% ÷ '+n+' คน</td><td>'+fmt(Math.round(t.send*0.05/n))+' /คน</td></tr></table>'
+    + '<table><tr><th colspan="2">กระสอบ</th></tr><tr><td>ค้างยกมา</td><td>'+fmt(sackCarry)+'</td></tr>'
+    + '<tr><td>ค้างเพิ่มวันนี้</td><td>'+fmt(day.sackAdd)+'</td></tr>'
+    + '<tr><td>คืนวันนี้</td><td>'+fmt(day.sackRet)+'</td></tr><tr><td>ค้างสุทธิวันนี้</td><td>'+fmt(sackNet)+'</td></tr>'
+    + '<tr><th>ค้างสะสมรวม</th><th>'+fmt(sackCarry+sackNet)+'</th></tr></table>'
     + '</div></div>'
     + '<table><tr><th colspan="7">รายละเอียดการซื้อรายลูกค้า</th></tr>'
     + '<tr><th>ลูกค้า</th><th>รายการ</th><th>ยอด</th><th>จ่าย</th><th>ชำระหนี้เก่า</th><th>ค้าง</th><th>การจ่าย</th></tr>'+detail+'</table>'
