@@ -1,7 +1,8 @@
 'use strict';
 // ================= storage =================
 var LS = { cfg:'pos.cfg', session:'pos.session', master:'pos.master', roster:'pos.roster',
-           lastyear:'pos.lastyear', queue:'pos.queue', day:function(d){return 'pos.day.'+d;} };
+           lastyear:'pos.lastyear', queue:'pos.queue', theme:'pos.theme', avatars:'pos.avatars',
+           day:function(d){return 'pos.day.'+d;} };
 function load(k, def){ try { var v = JSON.parse(localStorage.getItem(k)); return v==null?def:v; } catch(e){ return def; } }
 function save(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
 function fmt(n){ return (Number(n)||0).toLocaleString('th-TH'); }
@@ -32,6 +33,69 @@ var day = null;
 var editKey = null, payMode = 'เงินสด', modalCust = null;
 var pendingLogin = null, selectedLine = null, pinBuf = '';
 
+// ================= theme =================
+var THEMES = [
+  { id:'gold',   name:'ทอง',  accent:'#B08D2E' },
+  { id:'blue',   name:'ฟ้า',   accent:'#33699E' },
+  { id:'purple', name:'ม่วง',  accent:'#7551A8' },
+  { id:'green',  name:'เขียว', accent:'#3B7D53' },
+  { id:'orange', name:'ส้ม',   accent:'#C0722A' }
+];
+function applyTheme(id){
+  var t = THEMES.filter(function(x){ return x.id===id; })[0] || THEMES[0];
+  if (t.id==='gold') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t.id;
+  document.querySelector('meta[name=theme-color]').setAttribute('content', t.accent);
+  save(LS.theme, t.id);
+}
+applyTheme(load(LS.theme, 'gold'));
+function renderThemePick(){
+  var cur = load(LS.theme, 'gold');
+  $('themePick').innerHTML = THEMES.map(function(t){
+    return '<button onclick="applyTheme(\''+t.id+'\');renderThemePick()" title="'+t.name+'"'
+      +' style="width:44px;height:44px;border-radius:99px;cursor:pointer;background:'+t.accent+';'
+      +'border:3px solid '+(t.id===cur?'var(--ink)':'transparent')+';outline:2px solid var(--line)"></button>';
+  }).join('');
+}
+
+// ================= avatars =================
+var avatars = load(LS.avatars, {});
+function loadAvatars(){
+  apiGet('avatars').then(function(j){
+    if (j.ok){ avatars = j.avatars||{}; save(LS.avatars, avatars); }
+  }).catch(function(){});  // offline ใช้ cache เดิม
+}
+function avatarHTML(name, cls){
+  var n = String(name||'').trim();
+  if (avatars[n]) return '<span class="'+cls+'" style="overflow:hidden"><img src="'+avatars[n]+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:99px"></span>';
+  return '<span class="'+cls+'">'+(n[0]||'?')+'</span>';
+}
+function pickAvatar(input){
+  var f = input.files && input.files[0]; input.value='';
+  if (!f) return;
+  $('avMsg').textContent = 'กำลังย่อรูป…';
+  var img = new Image(), rd = new FileReader();
+  rd.onload = function(){ img.src = rd.result; };
+  img.onload = function(){
+    var S = 96, c = document.createElement('canvas'); c.width = c.height = S;
+    var m = Math.min(img.width, img.height); // ครอปสี่เหลี่ยมจัตุรัสกลางภาพ
+    c.getContext('2d').drawImage(img, (img.width-m)/2, (img.height-m)/2, m, m, 0, 0, S, S);
+    var data = c.toDataURL('image/jpeg', .72);
+    $('avMsg').textContent = 'กำลังบันทึก…';
+    apiPost({ action:'saveAvatar', name:session.name, img:data }).then(function(j){
+      if (!j.ok) throw j.error;
+      avatars[session.name] = data; save(LS.avatars, avatars);
+      renderCfgAvatar(); $('avMsg').textContent = '✓ บันทึกแล้ว';
+    }).catch(function(e){ $('avMsg').textContent = '✗ บันทึกไม่ได้ ('+e+')'; });
+  };
+  img.onerror = function(){ $('avMsg').textContent = '✗ อ่านรูปไม่ได้'; };
+  rd.readAsDataURL(f);
+}
+function renderCfgAvatar(){
+  var n = session.name;
+  $('cfgAv').innerHTML = avatars[n] ? '<img src="'+avatars[n]+'" alt="" style="width:100%;height:100%;object-fit:cover">' : (n[0]||'?');
+}
+
 // ================= api =================
 function apiGet(action, params){
   var q = '?action=' + encodeURIComponent(action);
@@ -46,7 +110,7 @@ function apiPost(body){
 function boot(){
   if (!cfg.url){ showLoginStage('needCfg'); return; }
   if (session){ enterApp(); return; }
-  showLoginStage('empPin'); loadRoster();
+  showLoginStage('empPin'); loadRoster(); loadAvatars();
 }
 function showLoginStage(which){
   $('login').classList.remove('hidden'); $('app').classList.add('hidden');
@@ -98,14 +162,17 @@ function submitEmpPin(name){
     if (j.choose){  // PIN ตรงหลายคน → เลือกชื่อ
       $('candList').innerHTML = j.choose.map(function(n){
         return '<button onclick="submitEmpPin(\''+n.replace(/'/g,"\\'")+'\')">'
-          + '<span class="av">'+(n[0]||'?')+'</span><span class="nm">'+n+'</span></button>';
+          + avatarHTML(n,'av') + '<span class="nm">'+n+'</span></button>';
       }).join('');
       showLoginStage('chooseName'); return;
     }
     if (!j.ok){ $('empErr').textContent = j.error||'PIN ไม่ถูกต้อง'; pinBuf=''; renderPinDots(); showLoginStage('empPin'); return; }
     pendingLogin = { name:j.name, line:j.line||'', token:j.token };
     selectedLine = j.line || (roster.lines[0]||'');
-    $('pinAv').textContent = j.name[0]||'?'; $('pinName').textContent = j.name;
+    $('pinAv').innerHTML = avatars[j.name]
+      ? '<img src="'+avatars[j.name]+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:99px">'
+      : (j.name[0]||'?');
+    $('pinName').textContent = j.name;
     updatePinLine();
     showLoginStage('confirmLine');
   }).catch(function(e){ $('empErr').textContent = 'เชื่อมต่อไม่ได้ ('+e+')'; pinBuf=''; renderPinDots(); showLoginStage('empPin'); });
@@ -166,6 +233,7 @@ function enterApp(){
   }).join('');
   go(navs[0][0], $('nav').children[0]);
   renderChip(load(LS.queue,[]).length);
+  loadAvatars();
   if (session.role==='employee'){ ensureMaster(); }
 }
 function go(id, btn){
@@ -460,20 +528,42 @@ function loadMonitor(){
     $('monTotal').textContent = fmt(j.total);
     $('monRunning').textContent = j.running+' / '+j.count;
     $('monStatus').textContent = 'อัปเดต '+ new Date().toLocaleTimeString('th-TH');
-    $('monList').innerHTML = j.lines.sort(function(a,b){ return a.line<b.line?-1:1; }).map(function(l){
-      if (l.status==='nodata')
-        return '<div class="lineitem"><div class="h"><div class="badge">'+l.line+'</div>'
-          +'<div class="who2"><b>—</b><small>ยังไม่มีข้อมูลวันนี้</small></div>'
-          +'<span class="chip"><span class="dot"></span> ยังไม่เริ่ม</span></div></div>';
-      var fresh = l.status==='closed' ? 'offline' : (l.agoMin!=null && l.agoMin<=10 ? 'synced' : 'stale');
-      var stt = l.status==='closed' ? 'ปิดวันแล้ว' : (l.agoMin!=null ? l.agoMin+' นาที' : '—');
-      return '<div class="lineitem"><div class="h"><div class="badge">'+l.line+'</div>'
-        +'<div class="who2"><b>'+(l.employees||'—')+'</b><small>ลูกค้าแล้ว '+l.customers+' ราย</small></div>'
-        +'<span class="chip '+(fresh==='synced'?'ok':(fresh==='stale'?'wait':''))+'"><span class="dot"></span> '+stt+'</span></div>'
-        +'<div class="foot"><span class="'+fresh+'">'+(l.status==='closed'?'ส่งรายงานแล้ว ✓':'ค้างใหม่ '+fmt(l.owed))+'</span>'
-        +'<span class="money">'+fmt(l.moneySent)+'</span></div></div>';
-    }).join('') || '<p class="note">ยังไม่มีสายที่เริ่มขายวันนี้</p>';
+    $('monList').innerHTML = j.lines.sort(function(a,b){ return a.line<b.line?-1:1; })
+      .map(monCard).join('') || '<p class="note">ยังไม่มีสายที่เริ่มขายวันนี้</p>';
   }).catch(function(e){ $('monStatus').textContent='โหลดไม่ได้ ('+e+')'; });
+}
+function monCard(l){
+  if (l.status==='nodata')
+    return '<div class="lineitem idle"><div class="h"><div class="badge">'+l.line+'</div>'
+      +'<div class="who2"><b>—</b><small>ยังไม่มีข้อมูลวันนี้</small></div>'
+      +'<span class="chip"><span class="dot"></span> ยังไม่เริ่ม</span></div></div>';
+  var fresh = l.status==='closed' ? 'offline' : (l.agoMin!=null && l.agoMin<=10 ? 'synced' : 'stale');
+  var stt = l.status==='closed' ? 'ปิดวันแล้ว' : (l.agoMin!=null ? l.agoMin+' นาที' : '—');
+  var emps = String(l.employees||'').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  var avs = emps.length ? '<span class="avs">'+emps.slice(0,3).map(function(n){ return avatarHTML(n,'av2'); }).join('')+'</span>' : '';
+  // progress ลูกค้า: มีตัวหาร (ลูกค้าประจำของสาย) → bar เต็มรูปแบบ
+  var prog = '';
+  if (l.customers>0 && l.custTotal>0){
+    var pc = Math.min(100, Math.round(l.customers*100/l.custTotal));
+    prog = '<div class="prog"><div class="pl"><span>ขายแล้ว '+l.customers+'/'+l.custTotal+' ร้าน</span><span>'+pc+'%</span></div>'
+      +'<div class="bar"><i style="width:'+pc+'%"></i></div></div>';
+  }
+  // ยอดขายรายสินค้า: bar เทียบสัดส่วนกับตัวที่ขายมากสุด (โชว์ 4 อันดับแรก)
+  var ids = Object.keys(l.sold||{}).filter(function(k){ return l.sold[k]>0; })
+    .sort(function(a,b){ return l.sold[b]-l.sold[a]; }).slice(0,4);
+  var mx = ids.length ? l.sold[ids[0]] : 0;
+  var bars = ids.length ? '<div class="soldbars">'+ids.map(function(k){
+    return '<div class="sb"><span class="n">'+k+'</span><span class="t"><i style="width:'
+      +Math.max(4, Math.round(l.sold[k]*100/mx))+'%"></i></span><span class="q">'+fmt(l.sold[k])+'</span></div>';
+  }).join('')+'</div>' : '';
+  var small = prog ? '' : (l.customers>0 ? 'ลูกค้าแล้ว '+l.customers+' ราย' : 'ปิดผ่านระบบเดิม — ไม่มีรายละเอียด');
+  return '<div class="lineitem"><div class="h"><div class="badge">'+l.line+'</div>'
+    +'<div class="who2"><b>'+(l.employees||'—')+'</b>'+(small?'<small>'+small+'</small>':'')+'</div>'
+    +avs
+    +'<span class="chip '+(fresh==='synced'?'ok':(fresh==='stale'?'wait':''))+'"><span class="dot"></span> '+stt+'</span></div>'
+    +prog+bars
+    +'<div class="foot"><span class="'+fresh+'">'+(l.status==='closed'?'ส่งรายงานแล้ว ✓':'ค้างใหม่ '+fmt(l.owed))+'</span>'
+    +'<span class="money">'+fmt(l.moneySent)+'</span></div></div>';
 }
 setInterval(function(){ if ($('scr-monitor').classList.contains('active')) loadMonitor(); }, 60000);
 
@@ -551,6 +641,7 @@ function renderCfg(){
   showEl('cfgLineWrap', session.role==='employee'); if (session.role==='employee') $('cfgLine').textContent=session.line;
   $('cfgTarget').textContent = (master.target==='prod'?'ฐานจริง (1zd1)':'ฐานทดสอบ');
   $('cfgDate').textContent=todayStr(); $('cfgCount').textContent=day?Object.keys(day.entries).length:0;
+  renderThemePick(); renderCfgAvatar();
 }
 function clearDay(btn){
   arm(btn, 'แตะอีกครั้ง ยืนยันล้าง (เฉพาะเครื่องนี้)', function(){

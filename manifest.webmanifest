@@ -3,7 +3,10 @@
   "short_name": "GoPMaS",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#FAF6EC",
+  "background_color": "#FFFFFF",
   "theme_color": "#B08D2E",
-  "icons": [{ "src": "parrot.png", "sizes": "600x600", "type": "image/png" }]
+  "icons": [
+    { "src": "parrot.png", "sizes": "600x600", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }

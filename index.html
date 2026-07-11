@@ -10,9 +10,18 @@
 <style>
   :root {
     --cream:#FAF6EC; --card:#FFF; --ink:#2B2415; --muted:#8A7F65; --line:#E8DFC8;
-    --gold:#B08D2E; --gold-dark:#8C6F1F; --frost:#4C93A6; --frost-soft:#E4F0F2;
+    --gold:#B08D2E; --gold-lite:#C7A33B; --gold-dark:#8C6F1F; --frost:#4C93A6; --frost-soft:#E4F0F2;
     --green:#3E7C4F; --red:#B3402E; --amber:#C08A2E;
   }
+  /* ธีมสี — override เฉพาะโทนหลัก+พื้น ส่วนสีสถานะ (แดง/เขียว/เหลือง) คงเดิมเพื่อความหมายที่คงที่ */
+  [data-theme="blue"]   { --cream:#EFF4FA; --line:#D7E2EF; --muted:#6E7E92; --ink:#1D2733;
+    --gold:#33699E; --gold-lite:#5487B8; --gold-dark:#27527C; }
+  [data-theme="purple"] { --cream:#F5F1FA; --line:#E2D9EF; --muted:#7E7292; --ink:#291F33;
+    --gold:#7551A8; --gold-lite:#9273BE; --gold-dark:#5C3F86; }
+  [data-theme="green"]  { --cream:#EFF6F0; --line:#D6E6DA; --muted:#6C8272; --ink:#1E2B21;
+    --gold:#3B7D53; --gold-lite:#5C9973; --gold-dark:#2E6241; }
+  [data-theme="orange"] { --cream:#FBF2E9; --line:#F0DFC9; --muted:#93795F; --ink:#33240F;
+    --gold:#C0722A; --gold-lite:#D48F4C; --gold-dark:#995A1F; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body { margin:0; height:100%; overflow-x:hidden; }
   body {
@@ -44,7 +53,7 @@
   }
   input:focus, select:focus { outline:2px solid var(--gold); border-color:var(--gold); }
   .btn { border:none; border-radius:12px; padding:12px 16px; font-size:16px; font-weight:600; cursor:pointer; width:100%; }
-  .btn-gold { background:linear-gradient(160deg,#C7A33B,var(--gold)); color:#fff; }
+  .btn-gold { background:linear-gradient(160deg,var(--gold-lite),var(--gold)); color:#fff; }
   .btn-frost { background:var(--frost); color:#fff; }
   .btn-ghost { background:transparent; border:1px solid var(--line); color:var(--ink); font-weight:500; }
   .row { display:flex; gap:10px; } .row>* { flex:1; }
@@ -141,6 +150,23 @@
   .lineitem .foot { display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:12px; }
   .lineitem .money { font-weight:700; font-variant-numeric:tabular-nums; font-size:15px; }
   .synced { color:var(--frost); } .stale { color:var(--amber); } .offline { color:var(--muted); }
+  .lineitem.idle { opacity:.55; }
+  .lineitem .avs { display:flex; }
+  .lineitem .avs .av2 { width:26px; height:26px; border-radius:99px; border:2px solid var(--card);
+    background:var(--frost-soft); color:var(--frost); font-size:11px; font-weight:700;
+    display:grid; place-items:center; margin-left:-7px; overflow:hidden; }
+  .lineitem .avs .av2:first-child { margin-left:0; }
+  .lineitem .avs .av2 img { width:100%; height:100%; object-fit:cover; }
+  .prog { margin-top:4px; }
+  .prog .pl { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:3px; font-variant-numeric:tabular-nums; }
+  .prog .bar { height:7px; border-radius:99px; background:var(--cream); overflow:hidden; }
+  .prog .bar i { display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--frost),var(--gold)); transition:width .5s; }
+  .soldbars { margin-top:8px; display:grid; gap:4px; }
+  .soldbars .sb { display:grid; grid-template-columns:64px 1fr 34px; align-items:center; gap:7px; font-size:11px; }
+  .soldbars .sb .n { color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .soldbars .sb .t { height:6px; border-radius:99px; background:var(--cream); overflow:hidden; }
+  .soldbars .sb .t i { display:block; height:100%; border-radius:99px; background:var(--gold-lite); }
+  .soldbars .sb .q { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
 
   /* ---------- nav ---------- */
   nav { position:fixed; bottom:0; left:0; right:0; z-index:10; display:flex; background:var(--card); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
@@ -239,6 +265,7 @@
 <!-- ========== APP ========== -->
 <div class="app hidden" id="app">
   <header>
+    <img src="parrot.png" alt="" width="26" height="26" style="border-radius:8px">
     <h1>GoPMaS <small id="hSub"></small></h1>
     <span class="chip" id="syncChip" onclick="syncQueue()">–</span>
   </header>
@@ -337,6 +364,17 @@
 
     <!-- ตั้งค่า -->
     <section class="screen" id="scr-cfg">
+      <div class="card"><h2>รูปโปรไฟล์</h2>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div id="cfgAv" style="width:64px;height:64px;border-radius:99px;background:var(--frost-soft);color:var(--frost);display:grid;place-items:center;font-weight:700;font-size:26px;overflow:hidden;flex:none"></div>
+          <div style="flex:1">
+            <button class="btn btn-ghost" style="padding:9px" onclick="document.getElementById('avFile').click()">📷 เปลี่ยนรูป</button>
+            <p class="note" id="avMsg" style="margin:6px 0 0">รูปจะแสดงตอนเข้าระบบและบนจอมอนิเตอร์</p>
+          </div>
+        </div>
+        <input type="file" id="avFile" accept="image/*" class="hidden" onchange="pickAvatar(this)">
+      </div>
+      <div class="card"><h2>ธีมสี</h2><div id="themePick" style="display:flex;gap:12px"></div></div>
       <div class="card"><h2>บัญชีที่ใช้งาน</h2>
         <p class="note">ผู้ใช้ <b id="cfgUser"></b> · บทบาท <b id="cfgRole"></b> <span id="cfgLineWrap">· สาย <b id="cfgLine"></b></span></p>
         <p class="note">ข้อมูล <b id="cfgTarget"></b> · วันที่ <b id="cfgDate"></b></p>
