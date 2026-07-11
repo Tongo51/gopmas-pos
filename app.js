@@ -394,7 +394,7 @@ function sendHeartbeat(){
   var t = totals();
   apiPost({ action:'heartbeat', line:session.line, employees:day.employees,
     customers:Object.keys(day.entries).length, cash:t.cash, owed:t.owed, moneySent:t.send,
-    sold:t.sold, status:'running' }).catch(function(){});
+    sold:t.sold, status: day.closed ? 'closed' : 'running' }).catch(function(){});
 }
 setInterval(sendHeartbeat, 180000); // ทุก 3 นาที
 
@@ -414,6 +414,7 @@ function submitDay(btn){
   if (!Object.keys(day.entries).length){ toast('ยังไม่มีรายการขาย'); return; }
   arm(btn, 'แตะอีกครั้ง · ยืนยันส่งเงิน '+fmt(totals().send)+' บาท', function(){
     var q = load(LS.queue,[]); q.push(buildPayload()); save(LS.queue,q);
+    day.closed = true; save(LS.day(day.date), day);  // heartbeat หลังจากนี้ต้องไม่ทับสถานะ closed
     $('submitNote').textContent = 'เข้าคิวส่งแล้ว — ถ้าไม่มีสัญญาณจะส่งเองเมื่อออนไลน์';
     syncQueue();
   });
@@ -460,6 +461,10 @@ function loadMonitor(){
     $('monRunning').textContent = j.running+' / '+j.count;
     $('monStatus').textContent = 'อัปเดต '+ new Date().toLocaleTimeString('th-TH');
     $('monList').innerHTML = j.lines.sort(function(a,b){ return a.line<b.line?-1:1; }).map(function(l){
+      if (l.status==='nodata')
+        return '<div class="lineitem"><div class="h"><div class="badge">'+l.line+'</div>'
+          +'<div class="who2"><b>—</b><small>ยังไม่มีข้อมูลวันนี้</small></div>'
+          +'<span class="chip"><span class="dot"></span> ยังไม่เริ่ม</span></div></div>';
       var fresh = l.status==='closed' ? 'offline' : (l.agoMin!=null && l.agoMin<=10 ? 'synced' : 'stale');
       var stt = l.status==='closed' ? 'ปิดวันแล้ว' : (l.agoMin!=null ? l.agoMin+' นาที' : '—');
       return '<div class="lineitem"><div class="h"><div class="badge">'+l.line+'</div>'
