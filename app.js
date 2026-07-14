@@ -398,8 +398,8 @@ function setSendMethod(m){ day.sendMethod=m; Array.prototype.forEach.call($('pay
 function renderSummary(){
   ['inFuel:fuel','inGas:gas'].forEach(function(m){ var a=m.split(':'); day[a[1]]=$(a[0]).value; });
   var t = totals();
-  // กระสอบค้างเพิ่ม = หลอดใหญ่ + หลอดเล็ก + โม่ + (ซอง×7) จากยอดขายวันนี้ — คำนวณอัตโนมัติ
-  day.sackAdd = (t.sold['หลอดใหญ่']||0) + (t.sold['หลอดเล็ก']||0) + (t.sold['โม่']||0) + (t.sold['ซอง']||0)*7;
+  // กระสอบค้างเพิ่ม = หลอดใหญ่ + หลอดเล็ก + โม่ + (ซอง×6) จากยอดขายวันนี้ — คำนวณอัตโนมัติ
+  day.sackAdd = (t.sold['หลอดใหญ่']||0) + (t.sold['หลอดเล็ก']||0) + (t.sold['โม่']||0) + (t.sold['ซอง']||0)*6;
   saveDay();
   // พนักงาน
   var emps = roster.employees.slice().sort(function(a,b){ return (a.line===session.line?0:1)-(b.line===session.line?0:1); });
