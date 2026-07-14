@@ -668,12 +668,12 @@ function reportHTML(){
     return '<tr><td>'+k+'</td><td style="text-align:left">'+items+'</td><td>'+fmt(e.total)+'</td><td>'+fmt(e.paid)+'</td><td>'+fmt(e.paidDebt)+'</td><td>'+fmt(e.owed)+'</td><td>'+(e.payment||'')+'</td></tr>';
   }).join('') || '<tr><td colspan="7">— ไม่มี —</td></tr>';
   return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>รายงานขาย '+session.line+' '+day.date+'</title>'
-    + '<style>@page{size:A4;margin:12mm}*{font-family:\'Sarabun\',\'Leelawadee UI\',sans-serif}body{color:#000;font-size:13px}'
-    + 'h1{font-size:18px;margin:0 0 2px}.sub{color:#444;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-bottom:10px}'
-    + 'th,td{border:1px solid #999;padding:4px 6px;text-align:right}th:first-child,td:first-child{text-align:left}'
-    + '.cols{display:flex;gap:16px}.cols>div{flex:1}.sign{display:flex;gap:24px;margin-top:30px}'
-    + '.sign div{flex:1;border-top:1px dotted #000;text-align:center;padding-top:4px;font-size:12px}.pbtn{margin:10px 0}'
-    + '@media print{.pbtn{display:none}}</style></head><body>'
+    + '<style>@page{size:A4;margin:8mm}*{font-family:\'Sarabun\',\'Leelawadee UI\',sans-serif}body{color:#000;font-size:10px}'
+    + 'h1{font-size:15px;margin:0}.sub{color:#444;margin-bottom:5px;font-size:10px}table{width:100%;border-collapse:collapse;margin-bottom:5px}'
+    + 'th,td{border:1px solid #999;padding:1px 4px;text-align:right;line-height:1.25}th:first-child,td:first-child{text-align:left}'
+    + '.cols{display:flex;gap:12px}.cols>div{flex:1}.sign{display:flex;gap:24px;margin-top:14px}'
+    + '.sign div{flex:1;border-top:1px dotted #000;text-align:center;padding-top:4px;font-size:11px}.pbtn{margin:8px 0}'
+    + '@media print{.pbtn{display:none}body{font-size:9.5px}}</style></head><body>'
     + '<button class="pbtn" onclick="window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>'
     + '<h1>รายงานขายประจำวัน — สาย '+session.line+'</h1>'
     + '<div class="sub">วันที่ '+day.date+' · พนักงาน: '+(day.employees.join(', ')||'-')+' · ส่งเงินโดย: '+(day.sendMethod||'-')+'</div>'
