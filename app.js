@@ -262,7 +262,7 @@ function refreshMaster(silent){
     renderChallenge(); renderCustomers();
   }).catch(function(e){ if(!silent) toast('โหลดข้อมูลไม่ได้: '+e+' (ใช้ข้อมูลเดิม)'); });
   apiGet('lastyear', { line:session.line }).then(function(j){
-    if (j.ok){ save(LS.lastyear+'.'+todayStr(), j); renderChallenge(); }
+    if (j.ok){ save(lyKey(), j); renderChallenge(); }
   }).catch(function(){});
 }
 
@@ -272,8 +272,10 @@ function newDay(){ return { date:todayStr(), entries:{}, employees:[], withdraw:
 function saveDay(){ save(LS.day(day.date), day); scheduleHeartbeat(); }
 
 // ================= sell: challenge =================
+// คีย์ต้องมีสาย — เครื่องเดียวเคยล็อกอินหลายสายได้ ถ้าไม่แยกสาย ยอดปีที่แล้วของสายอื่นจะรั่วมาแสดง
+function lyKey(){ return LS.lastyear+'.'+session.line+'.'+todayStr(); }
 function renderChallenge(){
-  var ly = load(LS.lastyear+'.'+todayStr(), null);
+  var ly = load(lyKey(), null);
   var el = $('challenge'); if (!el) return;
   if (!ly || !ly.total){ el.innerHTML=''; return; }
   var now = totals().send, pct = ly.total ? Math.min(100, Math.round(now*100/ly.total)) : 0;
@@ -426,6 +428,7 @@ function renderSummary(){
   $('sackNet').textContent = fmt(sackNet);
   $('sackTotal').textContent = fmt((Number(day.sackCarry)||0) + sackNet);
   $('inFuel').value=day.fuel; $('inGas').value=day.gas; $('inSackAdd').value=day.sackAdd; $('inSackRet').value=day.sackRet;
+  showEl('amendBtn', !!day.closed);
   setSendMethod(day.sendMethod||'โอนเข้าบัญชี');
 }
 function setGrokk(pid, v){ day.grokk[pid]=v; saveDay(); }
@@ -470,7 +473,6 @@ setInterval(sendHeartbeat, 180000); // ทุก 3 นาที
 function buildPayload(){
   var t = totals();
   return { action:'submit',
-    txId:'TX'+day.date.replace(/\//g,'')+'-'+session.line+'-'+Date.now(),
     date:day.date, line:session.line, employees:day.employees,
     sold:t.sold, moneySent:t.send, fuelTotal:t.fuel+t.gas, cash:t.cash, owed:t.owed, debtPaid:t.debt,
     customers:Object.keys(day.entries).length, sendMethod:day.sendMethod,
@@ -480,11 +482,21 @@ function buildPayload(){
 function submitDay(btn){
   if (!day.employees.length){ toast('เลือกพนักงานที่ไปวันนี้ก่อน'); return; }
   if (!Object.keys(day.entries).length){ toast('ยังไม่มีรายการขาย'); return; }
+  if (day.closed){ toast('ปิดวันนี้ส่งไปแล้ว — กด "แก้ไขรายงานที่ส่งแล้ว" ถ้าต้องแก้'); syncQueue(); return; }
   arm(btn, 'แตะอีกครั้ง · ยืนยันส่งเงิน '+fmt(totals().send)+' บาท', function(){
     var q = load(LS.queue,[]); q.push(buildPayload()); save(LS.queue,q);
     day.closed = true; save(LS.day(day.date), day);  // heartbeat หลังจากนี้ต้องไม่ทับสถานะ closed
+    showEl('amendBtn', true);
     $('submitNote').textContent = 'เข้าคิวส่งแล้ว — ถ้าไม่มีสัญญาณจะส่งเองเมื่อออนไลน์';
     syncQueue();
+  });
+}
+// ส่งแก้ไข: ปลดล็อกให้แก้ตัวเลขแล้วปิดวันใหม่ — server เขียนทับแถวเดิม (วัน+สาย) ไม่เพิ่มแถว
+function amendDay(btn){
+  arm(btn, 'แตะอีกครั้ง · แก้ไขรายงานที่ส่งไปแล้ว', function(){
+    day.closed = false; save(LS.day(day.date), day);
+    $('submitNote').textContent = 'แก้ตัวเลขแล้วกดปิดวันอีกครั้ง — ระบบจะเขียนทับรายงานเดิม';
+    renderSummary();
   });
 }
 var syncing=false;
@@ -500,6 +512,7 @@ function syncQueue(){
       if (!j.ok && j.fatal){  // เช่น พนักงานซ้ำสาย — ห้าม retry ให้ผู้ใช้แก้แล้วส่งใหม่
         qq.shift(); save(LS.queue,qq); renderChip(qq.length);
         syncing=false;
+        day.closed = false; save(LS.day(day.date), day);  // ให้กดปิดวันใหม่ได้หลังแก้
         $('submitNote').textContent='✗ '+j.error+' — แก้รายชื่อพนักงานแล้วกดปิดวันใหม่';
         toast('ส่งรายงานไม่ผ่าน: '+j.error);
         return;
@@ -653,7 +666,7 @@ function clearDay(btn){
 // ================= พิมพ์ A4 (Android-safe: หน้าเอกสารแยก) =================
 function reportHTML(){
   var t=totals(), n=day.employees.length||1;
-  var ly = load(LS.lastyear+'.'+todayStr(), null);
+  var ly = load(lyKey(), null);
   var lyRows = (ly && ly.total)
     ? '<tr><td>วันนี้เมื่อปีที่แล้ว ('+(ly.date||'')+')</td><td>'+fmt(ly.total)+'</td></tr>'
       + '<tr><td>เทียบปีที่แล้ว</td><td>'+Math.round(t.send*100/ly.total)+'%</td></tr>'

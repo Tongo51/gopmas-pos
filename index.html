@@ -312,9 +312,11 @@
         <div class="sackline"><span>ค้างยกมา</span><b id="sackCarry">0</b></div>
         <div class="sackline"><span>ค้างสุทธิวันนี้</span><b id="sackNet">0</b></div>
         <div class="sackline tot"><span>ค้างสะสมรวม</span><b id="sackTotal">0</b></div>
-        <p class="hint">ค้างเพิ่ม = หลอดใหญ่ + หลอดเล็ก + โม่ + (ซอง×7) · คืนดึงจากบันทึกโรงงาน (facdata)</p>
+        <p class="hint">ค้างเพิ่ม = หลอดใหญ่ + หลอดเล็ก + โม่ + (ซอง×6) · คืนดึงจากบันทึกโรงงาน (facdata)</p>
       </div>
       <button class="btn btn-gold" onclick="submitDay(this)">✓ ปิดวัน / ส่งรายงาน</button>
+      <div style="height:9px"></div>
+      <button class="btn btn-ghost hidden" id="amendBtn" onclick="amendDay(this)">✎ แก้ไขรายงานที่ส่งแล้ว</button>
       <div style="height:9px"></div>
       <button class="btn btn-ghost" onclick="printReport()">🖨 พิมพ์รายงาน A4</button>
       <p class="note" id="submitNote"></p>
