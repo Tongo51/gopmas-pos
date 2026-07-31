@@ -245,7 +245,7 @@ function go(id, btn){
   if (id==='close'){ renderSummary(); loadWithdraw(); loadSackRet(); }  // ดึงเบิก+คืนกระสอบอัตโนมัติ
   if (id==='monitor') loadMonitor();
   if (id==='products') loadProducts();
-  if (id==='lines') renderLineProducts();
+  if (id==='lines'){ renderLineProducts(); loadSackDeductAdmin(); }
   if (id==='cfg') renderCfg();
 }
 
@@ -268,7 +268,7 @@ function refreshMaster(silent){
 
 // ================= day state =================
 function newDay(){ return { date:todayStr(), entries:{}, employees:[], withdraw:{}, grokk:{},
-  fuel:'', gas:'', sackAdd:'', sackRet:'', sackCarry:0, sendMethod:'โอนเข้าบัญชี' }; }
+  fuel:'', gas:'', sackAdd:'', sackRet:'', sackCarry:0, sackDeductOn:false, sackDeduct:0, sendMethod:'โอนเข้าบัญชี' }; }
 function saveDay(){ save(LS.day(day.date), day); scheduleHeartbeat(); }
 
 // ================= sell: challenge =================
@@ -393,7 +393,11 @@ function totals(){
     Object.keys(e.items).forEach(function(pid){ sold[pid]=(sold[pid]||0)+e.items[pid]; });
   });
   var fuel=Number(day?day.fuel:0)||0, gas=Number(day?day.gas:0)||0;
-  return { cash:cash, debt:debt, owed:owed, sold:sold, fuel:fuel, gas:gas, send:cash+debt-fuel-gas };
+  var send = cash+debt-fuel-gas;  // ยอดขาย = ฐานคอม = คอลัมน์ I — ห้ามบวกค่าหักกระสอบเข้าตัวนี้
+  // ค่าหักกระสอบเพิ่ม "เงินสดที่ต้องวาง" (deposit) เท่านั้น ไม่เข้า send/คอม/คอลัมน์ I
+  var deduct = (day && day.sackDeductOn) ? (Number(day.sackDeduct)||0) : 0;
+  return { cash:cash, debt:debt, owed:owed, sold:sold, fuel:fuel, gas:gas,
+           send:send, deduct:deduct, deposit:send+deduct };
 }
 function setSendMethod(m){ day.sendMethod=m; Array.prototype.forEach.call($('paySeg').children,function(b){ b.classList.toggle('on', b.textContent===m); });
   $('payHint').textContent = m==='โอนเข้าบัญชี' ? 'โอนแล้วแนบใบนำฝากมากับใบรายงาน A4' : 'ส่งเงินสดพร้อมใบรายงาน'; saveDay(); }
@@ -420,9 +424,13 @@ function renderSummary(){
   });
   $('stockTbl').innerHTML = rows;
   $('tCash').textContent=fmt(t.cash); $('tDebt').textContent=fmt(t.debt); $('tOwed').textContent=fmt(t.owed);
-  $('tSend').textContent=fmt(t.send);
+  $('tSend').textContent=fmt(t.send); $('tDeposit').textContent=fmt(t.deposit);
   var n = day.employees.length||1;
   $('tComm').textContent = fmt(Math.round(t.send*0.05/n))+' /คน ('+n+' คน)';
+  // หักค่ากระสอบค้างส่ง — แอดมินกำหนดต่อสาย พนักงานแก้ไม่ได้ · โผล่เมื่อมีค่าหัก (>0)
+  var dd = Number(day.sackDeduct)||0;
+  showEl('sackDeductBox', dd>0);
+  if (dd>0) $('sackDeductAmt').textContent = fmt(dd);
   var sackNet = (Number(day.sackAdd)||0)-(Number(day.sackRet)||0);
   $('sackCarry').textContent = fmt(day.sackCarry);
   $('sackNet').textContent = fmt(sackNet);
@@ -449,6 +457,9 @@ function loadSackRet(){
   apiGet('sackret',{ line:session.line }).then(function(j){
     if (!j.ok) throw j.error;
     day.sackRet = j.total; day.sackCarry = j.carry||0;
+    // ค่าหักกระสอบ = แอดมินตั้งต่อสาย (พนักงานแก้ไม่ได้) · cap ไม่เกินมูลค่ากระสอบที่ค้างจริง carry×10
+    var cap = (Number(j.carry)||0)*10, dd = Math.max(0, Number(j.deduct)||0);
+    day.sackDeduct = Math.min(dd, cap); day.sackDeductOn = day.sackDeduct>0;
     saveDay(); renderSummary();
   }).catch(function(){});  // offline ใช้ค่าที่ดึงไว้ล่าสุด
 }
@@ -476,14 +487,14 @@ function buildPayload(){
     date:day.date, line:session.line, employees:day.employees,
     sold:t.sold, moneySent:t.send, fuelTotal:t.fuel+t.gas, cash:t.cash, owed:t.owed, debtPaid:t.debt,
     customers:Object.keys(day.entries).length, sendMethod:day.sendMethod,
-    sackAdd:Number(day.sackAdd)||0, sackRet:Number(day.sackRet)||0 };
+    sackAdd:Number(day.sackAdd)||0, sackRet:Number(day.sackRet)||0, sackDeduct:t.deduct };
     // ไม่ส่งรายบิลรายลูกค้า — หนี้บันทึกเป็นยอดรวมสาย/วันฝั่ง server, รายละเอียดอยู่ในใบ A4
 }
 function submitDay(btn){
   if (!day.employees.length){ toast('เลือกพนักงานที่ไปวันนี้ก่อน'); return; }
   if (!Object.keys(day.entries).length){ toast('ยังไม่มีรายการขาย'); return; }
   if (day.closed){ toast('ปิดวันนี้ส่งไปแล้ว — กด "แก้ไขรายงานที่ส่งแล้ว" ถ้าต้องแก้'); syncQueue(); return; }
-  arm(btn, 'แตะอีกครั้ง · ยืนยันส่งเงิน '+fmt(totals().send)+' บาท', function(){
+  arm(btn, 'แตะอีกครั้ง · ยืนยันส่งเงิน '+fmt(totals().deposit)+' บาท', function(){
     var q = load(LS.queue,[]); q.push(buildPayload()); save(LS.queue,q);
     day.closed = true; save(LS.day(day.date), day);  // heartbeat หลังจากนี้ต้องไม่ทับสถานะ closed
     showEl('amendBtn', true);
@@ -591,6 +602,31 @@ function renderLineProducts(){
   }).join('');
 }
 function toggleLineProd(id){ lineProdSel[id]=!lineProdSel[id]; renderLineProducts(); }
+// หักค่ากระสอบรายสาย (แอดมิน) — พนักงานแก้ไม่ได้ · หักไม่เกินมูลค่ากระสอบที่ค้างจริง (cap ฝั่งพนักงาน)
+function loadSackDeductAdmin(){
+  $('sackDeductAdmin').innerHTML = '<p class="note">กำลังโหลด…</p>';
+  apiGet('sackdeducts').then(function(j){
+    if (!j.ok) throw j.error;
+    var lines = roster.lines||[];
+    if (!lines.length){ $('sackDeductAdmin').innerHTML='<p class="note">ยังไม่มีสาย — เพิ่มสายด้านบนก่อน</p>'; return; }
+    $('sackDeductAdmin').innerHTML = lines.map(function(l){
+      var v = (j.deducts||{})[l]||0, safe=String(l).replace(/'/g,"\\'");
+      return '<div class="row" style="align-items:center;margin-bottom:8px">'
+        +'<label style="margin:0;flex:0 0 56px">❄ '+l+'</label>'
+        +'<input type="number" min="0" inputmode="numeric" id="sd-'+l+'" value="'+(v||'')+'" placeholder="0 (ไม่หัก)" style="flex:1">'
+        +'<button class="emp-tag" style="margin:0" onclick="saveSackDeductAdmin(\''+safe+'\')">บันทึก</button></div>';
+    }).join('');
+    $('sdMsg').textContent='';
+  }).catch(function(e){ $('sackDeductAdmin').innerHTML='<p class="warn">โหลดไม่ได้ ('+e+')</p>'; });
+}
+function saveSackDeductAdmin(line){
+  var amt = Number($('sd-'+line).value)||0;
+  $('sdMsg').textContent='กำลังบันทึกสาย '+line+'…';
+  apiPost({ action:'saveSackDeduct', line:line, amount:amt }).then(function(j){
+    if (!j.ok) throw j.error;
+    $('sdMsg').textContent = amt>0 ? ('✓ สาย '+line+' หัก '+fmt(amt)+' บาท/วัน') : ('✓ สาย '+line+' ยกเลิกการหักแล้ว');
+  }).catch(function(e){ $('sdMsg').textContent='✗ '+e; });
+}
 function doAddLine(){
   var code=$('lnCode').value.trim(); if (!code){ toast('ใส่รหัสสาย'); return; }
   var prods = Object.keys(lineProdSel).filter(function(k){ return lineProdSel[k]; });
@@ -695,7 +731,9 @@ function reportHTML(){
     + '<table><tr><th colspan="2">ลูกค้าค้างจ่ายวันนี้</th></tr>'+credit+'</table></div><div>'
     + '<table><tr><td>ลูกค้าจ่าย</td><td>'+fmt(t.cash)+'</td></tr><tr><td>เก็บหนี้เก่า</td><td>'+fmt(t.debt)+'</td></tr>'
     + '<tr><td>ค้างใหม่วันนี้</td><td>'+fmt(t.owed)+'</td></tr><tr><td>ค่าน้ำมัน+แก๊ส</td><td>'+fmt(t.fuel+t.gas)+'</td></tr>'
-    + '<tr><th>ส่งเงินทั้งหมด</th><th>'+fmt(t.send)+'</th></tr>'+lyRows
+    + '<tr><td>ส่งเงิน (ยอดขาย)</td><td>'+fmt(t.send)+'</td></tr>'
+    + (t.deduct ? '<tr><td>หักค่ากระสอบค้างส่ง</td><td>'+fmt(t.deduct)+'</td></tr>' : '')
+    + '<tr><th>เงินสดที่ต้องส่ง</th><th>'+fmt(t.deposit)+'</th></tr>'+lyRows
     + '<tr><td>คอมมิชชั่น 5% ÷ '+n+' คน</td><td>'+fmt(Math.round(t.send*0.05/n))+' /คน</td></tr></table>'
     + '<table><tr><th colspan="2">กระสอบ</th></tr><tr><td>ค้างยกมา</td><td>'+fmt(sackCarry)+'</td></tr>'
     + '<tr><td>ค้างเพิ่มวันนี้</td><td>'+fmt(day.sackAdd)+'</td></tr>'

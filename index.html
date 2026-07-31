@@ -299,8 +299,13 @@
         <div class="totline"><span>ค้างใหม่วันนี้</span><b id="tOwed" style="color:var(--red)">0</b></div>
         <div class="row"><div><label>เติมน้ำมัน</label><input type="number" min="0" id="inFuel" inputmode="numeric" oninput="renderSummary()"></div>
           <div><label>เติมแก๊ส</label><input type="number" min="0" id="inGas" inputmode="numeric" oninput="renderSummary()"></div></div>
-        <div class="totline big"><span>ส่งเงินทั้งหมด</span><span class="big-num" id="tSend">0</span></div>
+        <div class="totline"><span>ส่งเงิน (ยอดขาย)</span><b id="tSend">0</b></div>
         <div class="totline"><span>คอมมิชชั่น 5%</span><b id="tComm">0</b></div>
+        <!-- หักค่ากระสอบค้างส่ง — แอดมินกำหนดต่อสาย พนักงานแก้ไม่ได้ · ไม่เข้าฐานคอม/คอลัมน์ I -->
+        <div id="sackDeductBox" class="hidden" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">
+          <div class="totline"><span>หักค่ากระสอบค้างส่ง <small style="color:var(--muted)">(แอดมินกำหนด)</small></span><b id="sackDeductAmt" style="color:var(--red)">0</b></div>
+        </div>
+        <div class="totline big"><span>ยอดเงินสดที่ต้องส่ง</span><span class="big-num" id="tDeposit">0</span></div>
         <label>ช่องทางส่งเงิน</label>
         <div class="seg" id="paySeg"><button class="on" onclick="setSendMethod('โอนเข้าบัญชี')">โอนเข้าบัญชี</button><button onclick="setSendMethod('เงินสด')">เงินสด</button></div>
         <p class="hint" id="payHint">โอนแล้วแนบใบนำฝากมากับใบรายงาน A4</p>
@@ -343,6 +348,12 @@
         <div style="height:12px"></div>
         <button class="btn btn-frost" onclick="doAddLine()">สร้างสาย</button>
         <p class="note" id="lnMsg"></p>
+      </div>
+      <div class="card">
+        <h2>หักค่ากระสอบค้างส่งรายสาย</h2>
+        <p class="hint">เงินหักต่อวันของแต่ละสาย (บาท) · <b>พนักงานแก้ไม่ได้</b> · ตั้ง 0 = ไม่หัก · ระบบหักไม่เกินมูลค่ากระสอบที่ค้างจริง (10 บ./ใบ) · ไม่เข้าฐานคอมมิชชั่น</p>
+        <div id="sackDeductAdmin" style="margin-top:10px"></div>
+        <p class="note" id="sdMsg"></p>
       </div>
     </section>
 
