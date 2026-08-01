@@ -766,7 +766,12 @@ document.addEventListener('input', function(e){
   var t = e.target;
   if (t && t.type==='number' && t.value!=='' && Number(t.value)<0) t.value = 0;
 }, true);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+  // มี controller อยู่แล้ว = เคยโหลดผ่าน SW → controllerchange ครั้งถัดไป = SW ใหม่หลัง deploy → reload ให้ได้โค้ดใหม่ทันที (data อยู่ใน localStorage ไม่หาย)
+  if (navigator.serviceWorker.controller)
+    navigator.serviceWorker.addEventListener('controllerchange', function(){ location.reload(); });
+}
 boot();
 buildPinPad();
 $('admPin').addEventListener('keydown', function(e){ if (e.key==='Enter') doAdminLogin(); }); // เครื่องอ่าน RFID พิมพ์รหัส+Enter
