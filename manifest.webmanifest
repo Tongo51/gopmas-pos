@@ -2,7 +2,7 @@
   "name": "GoPMaS POS",
   "short_name": "GoPMaS",
   "start_url": "./index.html",
-  "display": "standalone",
+  "display": "minimal-ui",
   "background_color": "#FFFFFF",
   "theme_color": "#B08D2E",
   "icons": [
