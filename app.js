@@ -580,7 +580,9 @@ function monCard(l){
     return '<div class="sb"><span class="n">'+k+'</span><span class="t"><i style="width:'
       +Math.max(4, Math.round(l.sold[k]*100/mx))+'%"></i></span><span class="q">'+fmt(l.sold[k])+'</span></div>';
   }).join('')+'</div>' : '';
-  var small = prog ? '' : (l.customers>0 ? 'ลูกค้าแล้ว '+l.customers+' ราย' : 'ปิดผ่านระบบเดิม — ไม่มีรายละเอียด');
+  // "ปิดผ่านระบบเดิม" ต้องผูกกับ status closed เท่านั้น — สาย running ที่ยังไม่บันทึกลูกค้า (customers=0) ไม่ใช่การปิดวัน
+  var small = prog ? '' : (l.status==='closed' ? 'ปิดผ่านระบบเดิม — ไม่มีรายละเอียด'
+    : l.customers>0 ? 'ลูกค้าแล้ว '+l.customers+' ราย' : 'ยังไม่บันทึกการขายในแอป');
   return '<div class="lineitem"><div class="h"><div class="badge">'+l.line+'</div>'
     +'<div class="who2"><b>'+(l.employees||'—')+'</b>'+(small?'<small>'+small+'</small>':'')+'</div>'
     +avs
