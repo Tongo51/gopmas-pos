@@ -718,15 +718,7 @@ function reportHTML(){
     var items = master.products.filter(function(p){return e.items[p.id];}).map(function(p){return p.name+'×'+e.items[p.id];}).join(', ');
     return '<tr><td>'+k+'</td><td style="text-align:left">'+items+'</td><td>'+fmt(e.total)+'</td><td>'+fmt(e.paid)+'</td><td>'+fmt(e.paidDebt)+'</td><td>'+fmt(e.owed)+'</td><td>'+(e.payment||'')+'</td></tr>';
   }).join('') || '<tr><td colspan="7">— ไม่มี —</td></tr>';
-  return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>รายงานขาย '+session.line+' '+day.date+'</title>'
-    + '<style>@page{size:A4;margin:8mm}*{font-family:\'Sarabun\',\'Leelawadee UI\',sans-serif}body{color:#000;font-size:10px}'
-    + 'h1{font-size:15px;margin:0}.sub{color:#444;margin-bottom:5px;font-size:10px}table{width:100%;border-collapse:collapse;margin-bottom:5px}'
-    + 'th,td{border:1px solid #999;padding:1px 4px;text-align:right;line-height:1.25}th:first-child,td:first-child{text-align:left}'
-    + '.cols{display:flex;gap:12px}.cols>div{flex:1}.sign{display:flex;gap:24px;margin-top:14px}'
-    + '.sign div{flex:1;border-top:1px dotted #000;text-align:center;padding-top:4px;font-size:11px}.pbtn{margin:8px 0}'
-    + '@media print{.pbtn{display:none}body{font-size:9.5px}}</style></head><body>'
-    + '<button class="pbtn" onclick="window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>'
-    + '<h1>รายงานขายประจำวัน — สาย '+session.line+'</h1>'
+  return '<h1>รายงานขายประจำวัน — สาย '+session.line+'</h1>'
     + '<div class="sub">วันที่ '+day.date+' · พนักงาน: '+(day.employees.join(', ')||'-')+' · ส่งเงินโดย: '+(day.sendMethod||'-')+'</div>'
     + '<div class="cols"><div>'
     + '<table><tr><th>สินค้า</th><th>เบิก</th><th>ขาย</th><th>กรอก</th><th>คืน</th></tr>'+stock+'</table>'
@@ -745,19 +737,38 @@ function reportHTML(){
     + '<table><tr><th colspan="7">รายละเอียดการซื้อรายลูกค้า</th></tr>'
     + '<tr><th>ลูกค้า</th><th>รายการ</th><th>ยอด</th><th>จ่าย</th><th>ชำระหนี้เก่า</th><th>ค้าง</th><th>การจ่าย</th></tr>'+detail+'</table>'
     + '<div class="sub" style="margin-top:6px">'+(day.sendMethod==='โอนเข้าบัญชี'?'* แนบใบนำฝากธนาคารมากับรายงานนี้':'')+'</div>'
-    + '<div class="sign"><div>ลงชื่อพนักงานขาย</div><div>ลงชื่อพนักงานโรงกระสอบ<br>(ยืนยันจำนวนกระสอบคืน)</div><div>ผู้รับเงิน</div></div>'
-    + '</body></html>';
+    + '<div class="sign"><div>ลงชื่อพนักงานขาย</div><div>ลงชื่อพนักงานโรงกระสอบ<br>(ยืนยันจำนวนกระสอบคืน)</div><div>ผู้รับเงิน</div></div>';
 }
+var PRINT_CSS =
+    '@page{size:A4;margin:8mm}'
+  + '#printArea{position:fixed;inset:0;background:#fff;color:#000;font-size:11px;overflow:auto;z-index:99999;padding:10px;'
+  + "font-family:'Sarabun','Leelawadee UI',sans-serif}"
+  + "#printArea *{font-family:'Sarabun','Leelawadee UI',sans-serif}"
+  + '#printArea h1{font-size:16px;margin:0}'
+  + '#printArea .sub{color:#444;margin-bottom:5px;font-size:11px}'
+  + '#printArea table{width:100%;border-collapse:collapse;margin-bottom:5px}'
+  + '#printArea th,#printArea td{border:1px solid #999;padding:1px 4px;text-align:right;line-height:1.25}'
+  + '#printArea th:first-child,#printArea td:first-child{text-align:left}'
+  + '#printArea .cols{display:flex;gap:12px}#printArea .cols>div{flex:1}'
+  + '#printArea .sign{display:flex;gap:24px;margin-top:14px}'
+  + '#printArea .sign div{flex:1;border-top:1px dotted #000;text-align:center;padding-top:4px;font-size:11px}'
+  + '#printArea .pbar{display:flex;gap:8px;margin-bottom:10px;position:sticky;top:0;background:#fff;padding:6px 0}'
+  + '#printArea .pbar button{flex:1;padding:12px;font-size:15px}'
+  + '@media print{body>*:not(#printArea){display:none!important}'
+  + '#printArea{position:static;padding:0;font-size:9.5px}#printArea .pbar{display:none}}';
+// พิมพ์ในหน้าเดิม (ไม่พึ่ง popup/iframe — Android บล็อกทั้งคู่) วาด overlay แล้วให้ @media print ซ่อนแอปเหลือแต่รายงาน
 function printReport(){
-  var w = window.open('', '_blank');
-  if (w){ w.document.open(); w.document.write(reportHTML()); w.document.close(); }
-  else {
-    // popup ถูกบล็อก → fallback ในหน้าเดิม (บาง Android)
-    var f = document.createElement('iframe'); f.style.position='fixed'; f.style.right='0'; f.style.bottom='0';
-    f.style.width='0'; f.style.height='0'; f.style.border='0'; document.body.appendChild(f);
-    f.contentDocument.open(); f.contentDocument.write(reportHTML()); f.contentDocument.close();
-    setTimeout(function(){ f.contentWindow.focus(); f.contentWindow.print(); }, 400);
+  if (!document.getElementById('printCSS')){
+    var s = document.createElement('style'); s.id='printCSS'; s.textContent=PRINT_CSS; document.head.appendChild(s);
   }
+  var old = document.getElementById('printArea'); if (old) old.remove();
+  var a = document.createElement('div'); a.id='printArea';
+  a.innerHTML = '<div class="pbar">'
+    + '<button onclick="window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>'
+    + '<button onclick="var p=document.getElementById(\'printArea\');if(p)p.remove()">✕ ปิด</button></div>'
+    + reportHTML();
+  document.body.appendChild(a); window.scrollTo(0,0);
+  setTimeout(function(){ try{ window.print(); }catch(e){} }, 350);
 }
 
 // ================= service worker + start =================
