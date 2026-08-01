@@ -413,6 +413,10 @@
     <div id="mUsual"></div>
     <button class="addbtn" id="mAddBtn" onclick="showExtra()">＋ เพิ่มสินค้าอื่น</button>
     <div class="extra" id="mExtra"></div>
+    <label class="row" id="mNoSackRow" style="display:none;align-items:center;gap:10px;cursor:pointer;background:var(--cream);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin:2px 0 0">
+      <input type="checkbox" id="mNoSack" onchange="updateNoSackRow()" style="width:22px;height:22px;flex:none">
+      <span style="flex:1;font-size:13px">น้ำแข็งซองเป็น<b>ก้อน</b> — ไม่ใช้กระสอบ <small style="color:var(--muted)">(ตัด ซอง×6 ออกจากยอดกระสอบ · โม่ยังนับปกติ)</small></span>
+    </label>
     <label>การจ่ายเงิน</label>
     <div class="seg" id="mPay"><button onclick="setPay('เงินสด')">เงินสด</button><button onclick="setPay('เครดิต')">เครดิต (ค้าง)</button></div>
     <div class="row"><div><label>จ่ายมาจริง (อัตโนมัติ)</label><input type="number" min="0" id="mPaid" inputmode="numeric" readonly tabindex="-1" style="background:var(--cream)"></div>

@@ -2,7 +2,7 @@
 // ================= storage =================
 var LS = { cfg:'pos.cfg', session:'pos.session', master:'pos.master', roster:'pos.roster',
            lastyear:'pos.lastyear', queue:'pos.queue', theme:'pos.theme', avatars:'pos.avatars',
-           day:function(d){return 'pos.day.'+d;} };
+           nosack:'pos.nosack', day:function(d){return 'pos.day.'+d;} };
 function load(k, def){ try { var v = JSON.parse(localStorage.getItem(k)); return v==null?def:v; } catch(e){ return def; } }
 function save(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
 function fmt(n){ return (Number(n)||0).toLocaleString('th-TH'); }
@@ -29,6 +29,7 @@ if (!cfg.url) { cfg.url = DEFAULT_URL; save(LS.cfg, cfg); }
 var session = load(LS.session, null);
 var master = load(LS.master, { products:[], customers:[], roster:[] });
 var roster = load(LS.roster, { employees:[], lines:[] });
+var noSackPrefs = load(LS.nosack, {}); // จำต่อลูกค้าในเครื่อง: ลูกค้าที่ซื้อซองเป็นก้อน (ไม่ใช้กระสอบ)
 var day = null;
 var editKey = null, payMode = 'เงินสด', modalCust = null;
 var pendingLogin = null, selectedLine = null, pinBuf = '';
@@ -336,8 +337,16 @@ function openEntry(name){
   $('mAddBtn').style.display = extraIds.length ? '' : 'none';
   $('mAddBtn').textContent = '＋ เพิ่มสินค้าอื่น ('+ extraIds.map(pnameOf).join(' · ') +')';
   $('mDebt').value = (e&&e.paidDebt)?e.paidDebt:'';
+  // ซองเป็นก้อน (ไม่ใช้กระสอบ): บิลนี้ถ้ามีค่าใช้ค่าบิล ไม่งั้น default จากที่จำไว้ต่อลูกค้าในเครื่อง
+  $('mNoSack').checked = (e && typeof e.noSack==='boolean') ? e.noSack : !!noSackPrefs[name];
+  updateNoSackRow();
   setPay(e? e.payment : 'เงินสด');  // จ่ายมาจริงคำนวณอัตโนมัติใน renderEntryTotal
   $('modal').classList.add('open');
+}
+// แสดงแถวเฉพาะเมื่อบิลนี้มีน้ำแข็งซอง หรือถูกตั้งไม่ใช้กระสอบไว้ (จะได้เห็น/ยกเลิกได้)
+function updateNoSackRow(){
+  var el = $('q-ซอง'); var qty = el ? (Number(el.value)||0) : 0;
+  $('mNoSackRow').style.display = (qty>0 || $('mNoSack').checked) ? 'flex' : 'none';
 }
 function prodRow(id, e, usual){
   var p = productById(id); if (!p) return '';
@@ -372,6 +381,7 @@ function renderEntryTotal(){
   var t = entryTotal(), paid = payMode==='เงินสด' ? t : 0;
   $('mPaid').value = paid||'';
   $('mTotal').textContent = fmt(t); $('mOwed').textContent = fmt(Math.max(0, t-paid));
+  updateNoSackRow();
 }
 function collectItems(){ var it={}; document.querySelectorAll('#modal .qty input').forEach(function(el){ var q=Number(el.value)||0; if(q>0) it[el.dataset.pid]=q; }); return it; }
 function saveEntry(){
@@ -380,7 +390,10 @@ function saveEntry(){
   var paid = payMode==='เงินสด' ? total : 0, paidDebt = Number($('mDebt').value)||0;
   if (!total && !paidDebt){ deleteEntry(); return; }
   if (editKey && editKey!==name) delete day.entries[editKey];
-  day.entries[name] = { items:items, total:total, paid:paid, paidDebt:paidDebt, owed:Math.max(0,total-paid), payment:payMode };
+  var noSack = $('mNoSack').checked;
+  day.entries[name] = { items:items, total:total, paid:paid, paidDebt:paidDebt, owed:Math.max(0,total-paid), payment:payMode, noSack:noSack };
+  if (noSack) noSackPrefs[name]=true; else delete noSackPrefs[name];  // จำต่อลูกค้าในเครื่อง
+  save(LS.nosack, noSackPrefs);
   saveDay(); closeEntry(); renderCustomers(); renderChallenge();
 }
 function deleteEntry(){ if (editKey){ delete day.entries[editKey]; saveDay(); } closeEntry(); renderCustomers(); renderChallenge(); }
@@ -404,8 +417,13 @@ function setSendMethod(m){ day.sendMethod=m; Array.prototype.forEach.call($('pay
 function renderSummary(){
   ['inFuel:fuel','inGas:gas'].forEach(function(m){ var a=m.split(':'); day[a[1]]=$(a[0]).value; });
   var t = totals();
-  // กระสอบค้างเพิ่ม = หลอดใหญ่ + หลอดเล็ก + โม่ + (ซอง×6) จากยอดขายวันนี้ — คำนวณอัตโนมัติ
-  day.sackAdd = (t.sold['หลอดใหญ่']||0) + (t.sold['หลอดเล็ก']||0) + (t.sold['โม่']||0) + (t.sold['ซอง']||0)*6;
+  // กระสอบค้างเพิ่ม: หลอดใหญ่+หลอดเล็ก+โม่ ทุกคน · ซอง×6 เฉพาะลูกค้าที่ใช้กระสอบ (noSack = ซื้อซองเป็นก้อน ตัดซองออก)
+  var sackAdd = 0;
+  Object.keys(day.entries).forEach(function(n){ var e=day.entries[n];
+    sackAdd += (e.items['หลอดใหญ่']||0)+(e.items['หลอดเล็ก']||0)+(e.items['โม่']||0);
+    if (!e.noSack) sackAdd += (e.items['ซอง']||0)*6;
+  });
+  day.sackAdd = sackAdd;
   saveDay();
   // พนักงาน
   var emps = roster.employees.slice().sort(function(a,b){ return (a.line===session.line?0:1)-(b.line===session.line?0:1); });
@@ -715,7 +733,7 @@ function reportHTML(){
   var credit = Object.keys(day.entries).filter(function(k){return day.entries[k].owed>0;})
     .map(function(k){ return '<tr><td>'+k+'</td><td>'+fmt(day.entries[k].owed)+'</td></tr>'; }).join('') || '<tr><td colspan="2">— ไม่มี —</td></tr>';
   var detail = Object.keys(day.entries).map(function(k){ var e=day.entries[k];
-    var items = master.products.filter(function(p){return e.items[p.id];}).map(function(p){return p.name+'×'+e.items[p.id];}).join(', ');
+    var items = master.products.filter(function(p){return e.items[p.id];}).map(function(p){return p.name+'×'+e.items[p.id]+((p.id==='ซอง'&&e.noSack)?' (ก้อน)':'');}).join(', ');
     return '<tr><td>'+k+'</td><td style="text-align:left">'+items+'</td><td>'+fmt(e.total)+'</td><td>'+fmt(e.paid)+'</td><td>'+fmt(e.paidDebt)+'</td><td>'+fmt(e.owed)+'</td><td>'+(e.payment||'')+'</td></tr>';
   }).join('') || '<tr><td colspan="7">— ไม่มี —</td></tr>';
   return '<h1>รายงานขายประจำวัน — สาย '+session.line+'</h1>'
