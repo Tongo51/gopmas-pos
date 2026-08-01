@@ -754,18 +754,34 @@ var PRINT_CSS =
   + '#printArea .sign div{flex:1;border-top:1px dotted #000;text-align:center;padding-top:4px;font-size:11px}'
   + '#printArea .pbar{display:flex;gap:8px;margin-bottom:10px;position:sticky;top:0;background:#fff;padding:6px 0}'
   + '#printArea .pbar button{flex:1;padding:12px;font-size:15px}'
+  + '#printArea .pnote{background:#fff8e1;border:1px solid #e0c060;border-radius:8px;padding:10px;margin-bottom:10px;font-size:13px;line-height:1.55;word-break:break-all}'
   + '@media print{body>*:not(#printArea){display:none!important}'
-  + '#printArea{position:static;padding:0;font-size:9.5px}#printArea .pbar{display:none}}';
+  + '#printArea{position:static;padding:0;font-size:9.5px}#printArea .pbar,#printArea .pnote{display:none}}';
 // พิมพ์ในหน้าเดิม (ไม่พึ่ง popup/iframe — Android บล็อกทั้งคู่) วาด overlay แล้วให้ @media print ซ่อนแอปเหลือแต่รายงาน
+// standalone PWA: window.print() เป็น no-op (ข้อจำกัด Chromium) → เด้งเปิดใน Chrome ที่พิมพ์ได้จริง
 function printReport(){
   if (!document.getElementById('printCSS')){
     var s = document.createElement('style'); s.id='printCSS'; s.textContent=PRINT_CSS; document.head.appendChild(s);
   }
+  var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
   var old = document.getElementById('printArea'); if (old) old.remove();
   var a = document.createElement('div'); a.id='printArea';
+  var closeBtn = '<button onclick="var p=document.getElementById(\'printArea\');if(p)p.remove()">✕ ปิด</button></div>';
+  if (standalone){
+    var appUrl = location.href.split('#')[0].split('?')[0];
+    // Android intent → เปิดใน Chrome (แอปนี้เป็น Chrome WebAPK อยู่แล้ว Chrome จึงมีแน่)
+    var intentUrl = 'intent://' + appUrl.replace(/^https?:\/\//,'') + '#Intent;scheme=https;package=com.android.chrome;end';
+    a.innerHTML = '<div class="pbar">'
+      + '<button onclick="location.href=\''+intentUrl+'\'">🌐 เปิดใน Chrome เพื่อพิมพ์</button>' + closeBtn
+      + '<div class="pnote">โหมดแอป (ไอคอนหน้า home) พิมพ์ไม่ได้ — เป็นข้อจำกัดของ Android<br>'
+      + 'แตะปุ่ม “เปิดใน Chrome เพื่อพิมพ์” ด้านบน แล้วกด “พิมพ์รายงาน A4” อีกครั้งในเบราว์เซอร์<br>'
+      + 'หรือเปิดลิงก์นี้ใน Chrome เอง: <b>'+appUrl+'</b></div>'
+      + reportHTML();
+    document.body.appendChild(a); window.scrollTo(0,0);
+    return;
+  }
   a.innerHTML = '<div class="pbar">'
-    + '<button onclick="window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>'
-    + '<button onclick="var p=document.getElementById(\'printArea\');if(p)p.remove()">✕ ปิด</button></div>'
+    + '<button onclick="window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>' + closeBtn
     + reportHTML();
   document.body.appendChild(a); window.scrollTo(0,0);
   setTimeout(function(){ try{ window.print(); }catch(e){} }, 350);
