@@ -297,8 +297,8 @@
         <div class="totline"><span>ลูกค้าจ่าย</span><b id="tCash">0</b></div>
         <div class="totline"><span>เก็บหนี้เก่า</span><b id="tDebt">0</b></div>
         <div class="totline"><span>ค้างใหม่วันนี้</span><b id="tOwed" style="color:var(--red)">0</b></div>
-        <div class="row"><div><label>เติมน้ำมัน</label><input type="number" min="0" id="inFuel" inputmode="numeric" oninput="renderSummary()"></div>
-          <div><label>เติมแก๊ส</label><input type="number" min="0" id="inGas" inputmode="numeric" oninput="renderSummary()"></div></div>
+        <div class="row"><div><label>เติมน้ำมัน</label><input type="number" min="0" id="inFuel" inputmode="numeric" oninput="setFuelGas('fuel',this.value)"></div>
+          <div><label>เติมแก๊ส</label><input type="number" min="0" id="inGas" inputmode="numeric" oninput="setFuelGas('gas',this.value)"></div></div>
         <div class="totline"><span>ส่งเงิน (ยอดขาย)</span><b id="tSend">0</b></div>
         <div class="totline"><span>คอมมิชชั่น 5%</span><b id="tComm">0</b></div>
         <!-- หักค่ากระสอบค้างส่ง — แอดมินกำหนดต่อสาย พนักงานแก้ไม่ได้ · ไม่เข้าฐานคอม/คอลัมน์ I -->

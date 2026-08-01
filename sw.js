@@ -1,5 +1,5 @@
 // GoPMaS POS — service worker: cache app shell ให้เปิดได้แม้ไม่มีสัญญาณ
-const CACHE = 'gopmas-pos-v26'; // ⚠ เปลี่ยนเลขเวอร์ชันทุกครั้งที่แก้ index.html/app.js (v26 = ตั้งลูกค้า "ซองเป็นก้อน ไม่ใช้กระสอบ" รายคน จำในเครื่อง ตัดเฉพาะ ซอง×6)
+const CACHE = 'gopmas-pos-v27'; // ⚠ เปลี่ยนเลขเวอร์ชันทุกครั้งที่แก้ index.html/app.js (v27 = แก้บั๊กค่าน้ำมัน/แก๊สหายตอน reload — renderSummary เคยอ่าน input ว่างทับ day)
 const SHELL = ['./', './index.html', './app.js', './manifest.webmanifest', './parrot.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

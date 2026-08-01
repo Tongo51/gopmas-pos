@@ -414,8 +414,8 @@ function totals(){
 }
 function setSendMethod(m){ day.sendMethod=m; Array.prototype.forEach.call($('paySeg').children,function(b){ b.classList.toggle('on', b.textContent===m); });
   $('payHint').textContent = m==='โอนเข้าบัญชี' ? 'โอนแล้วแนบใบนำฝากมากับใบรายงาน A4' : 'ส่งเงินสดพร้อมใบรายงาน'; saveDay(); }
+function setFuelGas(k, v){ day[k]=v; renderSummary(); }  // ต้นเหตุบั๊กเดิม: renderSummary เคยอ่าน input ทับ day ทำให้ค่าหายตอน reload
 function renderSummary(){
-  ['inFuel:fuel','inGas:gas'].forEach(function(m){ var a=m.split(':'); day[a[1]]=$(a[0]).value; });
   var t = totals();
   // กระสอบค้างเพิ่ม: หลอดใหญ่+หลอดเล็ก+โม่ ทุกคน · ซอง×6 เฉพาะลูกค้าที่ใช้กระสอบ (noSack = ซื้อซองเป็นก้อน ตัดซองออก)
   var sackAdd = 0;
