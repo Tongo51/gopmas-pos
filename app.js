@@ -757,58 +757,29 @@ function reportHTML(){
     + '<div class="sub" style="margin-top:6px">'+(day.sendMethod==='โอนเข้าบัญชี'?'* แนบใบนำฝากธนาคารมากับรายงานนี้':'')+'</div>'
     + '<div class="sign"><div>ลงชื่อพนักงานขาย</div><div>ลงชื่อพนักงานโรงกระสอบ<br>(ยืนยันจำนวนกระสอบคืน)</div><div>ผู้รับเงิน</div></div>';
 }
-var PRINT_CSS =
-    '@page{size:A4;margin:8mm}'
-  + '#printArea{position:fixed;inset:0;background:#fff;color:#000;font-size:11px;overflow:auto;z-index:99999;padding:10px;'
-  + "font-family:'Sarabun','Leelawadee UI',sans-serif}"
-  + "#printArea *{font-family:'Sarabun','Leelawadee UI',sans-serif}"
-  + '#printArea h1{font-size:16px;margin:0}'
-  + '#printArea .sub{color:#444;margin-bottom:5px;font-size:11px}'
-  + '#printArea table{width:100%;border-collapse:collapse;margin-bottom:5px}'
-  + '#printArea th,#printArea td{border:1px solid #999;padding:1px 4px;text-align:right;line-height:1.25}'
-  + '#printArea th:first-child,#printArea td:first-child{text-align:left}'
-  + '#printArea .cols{display:flex;gap:12px}#printArea .cols>div{flex:1}'
-  + '#printArea .sign{display:flex;gap:24px;margin-top:14px}'
-  + '#printArea .sign div{flex:1;border-top:1px dotted #000;text-align:center;padding-top:4px;font-size:11px}'
-  + '#printArea .pbar{display:flex;gap:8px;margin-bottom:10px;position:sticky;top:0;background:#fff;padding:6px 0}'
-  + '#printArea .pbar button{flex:1;padding:12px;font-size:15px}'
-  + '#printArea .pnote{background:#fff8e1;border:1px solid #e0c060;border-radius:8px;padding:10px;margin-bottom:10px;font-size:13px;line-height:1.55;word-break:break-all}'
-  + '@media print{body>*:not(#printArea){display:none!important}'
-  + '#printArea{position:static;padding:0;font-size:9.5px}#printArea .pbar,#printArea .pnote{display:none}}';
-// พิมพ์ในหน้าเดิม (ไม่พึ่ง popup/iframe — Android บล็อกทั้งคู่) วาด overlay แล้วให้ @media print ซ่อนแอปเหลือแต่รายงาน
-// minimal-ui/browser: window.print() ทำงาน · standalone เก่า (ยังไม่ถอด-เพิ่มไอคอน): window.print() ตาย → ให้ copy ลิงก์ไปเปิด Chrome
+// กลไกพิมพ์เวอร์ชัน 31 กค. — เปิดหน้าเอกสารแยก (popup ก่อน, iframe fallback ถ้าโดนบล็อก)
+// เนื้อรายงานใช้ reportHTML() ปัจจุบัน (มีหักค่ากระสอบ + ป้าย (ก้อน) ครบ)
+function printDoc(){
+  return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>รายงานขาย '+session.line+' '+day.date+'</title>'
+    + '<style>@page{size:A4;margin:8mm}*{font-family:\'Sarabun\',\'Leelawadee UI\',sans-serif}body{color:#000;font-size:10px}'
+    + 'h1{font-size:15px;margin:0}.sub{color:#444;margin-bottom:5px;font-size:10px}table{width:100%;border-collapse:collapse;margin-bottom:5px}'
+    + 'th,td{border:1px solid #999;padding:1px 4px;text-align:right;line-height:1.25}th:first-child,td:first-child{text-align:left}'
+    + '.cols{display:flex;gap:12px}.cols>div{flex:1}.sign{display:flex;gap:24px;margin-top:14px}'
+    + '.sign div{flex:1;border-top:1px dotted #000;text-align:center;padding-top:4px;font-size:11px}.pbtn{margin:8px 0}'
+    + '@media print{.pbtn{display:none}body{font-size:9.5px}}</style></head><body>'
+    + '<button class="pbtn" onclick="window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>'
+    + reportHTML() + '</body></html>';
+}
 function printReport(){
-  if (!document.getElementById('printCSS')){
-    var s = document.createElement('style'); s.id='printCSS'; s.textContent=PRINT_CSS; document.head.appendChild(s);
+  var w = window.open('', '_blank');
+  if (w){ w.document.open(); w.document.write(printDoc()); w.document.close(); }
+  else {
+    // popup ถูกบล็อก → fallback ในหน้าเดิม (บาง Android)
+    var f = document.createElement('iframe'); f.style.position='fixed'; f.style.right='0'; f.style.bottom='0';
+    f.style.width='0'; f.style.height='0'; f.style.border='0'; document.body.appendChild(f);
+    f.contentDocument.open(); f.contentDocument.write(printDoc()); f.contentDocument.close();
+    setTimeout(function(){ f.contentWindow.focus(); f.contentWindow.print(); }, 400);
   }
-  // WebAPK ช่วง v24 บางเครื่องเป็น minimal-ui (ไม่ match standalone) แต่ window.print() ก็ตายเหมือนกัน
-  // → ถือว่า "พิมพ์ได้" เฉพาะ display-mode: browser (แท็บ Chrome จริง) เท่านั้น
-  var standalone = !(window.matchMedia && window.matchMedia('(display-mode: browser)').matches);
-  var old = document.getElementById('printArea'); if (old) old.remove();
-  var a = document.createElement('div'); a.id='printArea';
-  var closeBtn = '<button onclick="var p=document.getElementById(\'printArea\');if(p)p.remove()">✕ ปิด</button></div>';
-  if (standalone){
-    // เครื่องที่ยังเป็น standalone (WebAPK เก่ายังไม่อัปเดต display) พิมพ์ไม่ได้ → ทางเดียวคือเปิดใน Chrome เอง
-    var appUrl = location.href.split('#')[0].split('?')[0];
-    var copyJs = "navigator.clipboard&&navigator.clipboard.writeText('"+appUrl+"').then(function(){toast('คัดลอกลิงก์แล้ว — เปิด Chrome วางในช่อง URL แล้วกดพิมพ์อีกครั้ง')})";
-    a.innerHTML = '<div class="pbar">'
-      + '<button onclick="'+copyJs+'">📋 คัดลอกลิงก์เปิด Chrome</button>' + closeBtn
-      + '<div class="pnote">โหมดแอปพิมพ์ไม่ได้ — ต้องพิมพ์ผ่าน Chrome ตามนี้:<br>'
-      + '1. แตะปุ่ม “คัดลอกลิงก์” ด้านบน<br>'
-      + '2. เปิดแอป <b>Chrome</b> → แตะช่องที่อยู่ด้านบน<b>ค้างไว้</b> → เลือก “วาง” → ไป<br>'
-      + '3. กด “พิมพ์รายงาน A4” อีกครั้งในหน้าที่เปิดขึ้น<br>'
-      + '(ห้ามแตะลิงก์จากแชท — จะเด้งกลับเข้าแอปแล้วพิมพ์ไม่ได้เหมือนเดิม)<br>'
-      + 'ลิงก์: <b>'+appUrl+'</b></div>'
-      + reportHTML();
-    document.body.appendChild(a); window.scrollTo(0,0);
-    return;
-  }
-  a.innerHTML = '<div class="pbar">'
-    // reset scroll ก่อนพิมพ์ทุกครั้ง — Chrome Android จับภาพจากตำแหน่งที่เลื่อนค้าง ทำให้หัวรายงานหน้าแรกขาด
-    + '<button onclick="document.getElementById(\'printArea\').scrollTop=0;window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>' + closeBtn
-    + reportHTML();
-  document.body.appendChild(a); window.scrollTo(0,0);
-  setTimeout(function(){ a.scrollTop=0; try{ window.print(); }catch(e){} }, 350);
 }
 
 // ================= service worker + start =================
