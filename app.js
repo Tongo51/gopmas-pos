@@ -781,7 +781,9 @@ function printReport(){
   if (!document.getElementById('printCSS')){
     var s = document.createElement('style'); s.id='printCSS'; s.textContent=PRINT_CSS; document.head.appendChild(s);
   }
-  var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  // WebAPK ช่วง v24 บางเครื่องเป็น minimal-ui (ไม่ match standalone) แต่ window.print() ก็ตายเหมือนกัน
+  // → ถือว่า "พิมพ์ได้" เฉพาะ display-mode: browser (แท็บ Chrome จริง) เท่านั้น
+  var standalone = !(window.matchMedia && window.matchMedia('(display-mode: browser)').matches);
   var old = document.getElementById('printArea'); if (old) old.remove();
   var a = document.createElement('div'); a.id='printArea';
   var closeBtn = '<button onclick="var p=document.getElementById(\'printArea\');if(p)p.remove()">✕ ปิด</button></div>';
@@ -791,18 +793,22 @@ function printReport(){
     var copyJs = "navigator.clipboard&&navigator.clipboard.writeText('"+appUrl+"').then(function(){toast('คัดลอกลิงก์แล้ว — เปิด Chrome วางในช่อง URL แล้วกดพิมพ์อีกครั้ง')})";
     a.innerHTML = '<div class="pbar">'
       + '<button onclick="'+copyJs+'">📋 คัดลอกลิงก์เปิด Chrome</button>' + closeBtn
-      + '<div class="pnote">โหมดแอปยังพิมพ์ไม่ได้ — ถ้าเพิ่งอัปเดต ให้ <b>ถอดไอคอนแล้วเพิ่มใหม่</b> 1 ครั้งจะพิมพ์ได้เลย<br>'
-      + 'ระหว่างนี้: แตะ “คัดลอกลิงก์” → เปิด Chrome วางในช่อง URL → กด “พิมพ์รายงาน A4” อีกครั้ง<br>'
+      + '<div class="pnote">โหมดแอปพิมพ์ไม่ได้ — ต้องพิมพ์ผ่าน Chrome ตามนี้:<br>'
+      + '1. แตะปุ่ม “คัดลอกลิงก์” ด้านบน<br>'
+      + '2. เปิดแอป <b>Chrome</b> → แตะช่องที่อยู่ด้านบน<b>ค้างไว้</b> → เลือก “วาง” → ไป<br>'
+      + '3. กด “พิมพ์รายงาน A4” อีกครั้งในหน้าที่เปิดขึ้น<br>'
+      + '(ห้ามแตะลิงก์จากแชท — จะเด้งกลับเข้าแอปแล้วพิมพ์ไม่ได้เหมือนเดิม)<br>'
       + 'ลิงก์: <b>'+appUrl+'</b></div>'
       + reportHTML();
     document.body.appendChild(a); window.scrollTo(0,0);
     return;
   }
   a.innerHTML = '<div class="pbar">'
-    + '<button onclick="window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>' + closeBtn
+    // reset scroll ก่อนพิมพ์ทุกครั้ง — Chrome Android จับภาพจากตำแหน่งที่เลื่อนค้าง ทำให้หัวรายงานหน้าแรกขาด
+    + '<button onclick="document.getElementById(\'printArea\').scrollTop=0;window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>' + closeBtn
     + reportHTML();
   document.body.appendChild(a); window.scrollTo(0,0);
-  setTimeout(function(){ try{ window.print(); }catch(e){} }, 350);
+  setTimeout(function(){ a.scrollTop=0; try{ window.print(); }catch(e){} }, 350);
 }
 
 // ================= service worker + start =================
