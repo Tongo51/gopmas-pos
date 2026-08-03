@@ -242,8 +242,8 @@ function go(id, btn){
   $('scr-'+id).classList.add('active');
   Array.prototype.forEach.call($('nav').children, function(b){ b.classList.remove('on'); });
   if (btn) btn.classList.add('on');
-  if (id==='sell'){ renderChallenge(); renderCustomers(); }
-  if (id==='close'){ renderSummary(); loadWithdraw(); loadSackRet(); }  // ดึงเบิก+คืนกระสอบอัตโนมัติ
+  if (id==='sell'){ renderChallenge(); renderCustomers(); sendHeartbeat(); }  // sync กับเครื่องบัดดี้ทันทีที่เปิดหน้า
+  if (id==='close'){ renderSummary(); loadWithdraw(); loadSackRet(); sendHeartbeat(); loadHistory(); }
   if (id==='monitor') loadMonitor();
   if (id==='products') loadProducts();
   if (id==='lines'){ renderLineProducts(); loadSackDeductAdmin(); }
@@ -268,7 +268,8 @@ function refreshMaster(silent){
 }
 
 // ================= day state =================
-function newDay(){ return { date:todayStr(), entries:{}, employees:[], withdraw:{}, grokk:{},
+// tomb = บิลที่ลบไปแล้ว {ชื่อลูกค้า:เวลา} — ต้องเก็บไว้ ไม่งั้น sync จะดึงบิลที่ลบแล้วกลับมาจากเครื่องบัดดี้
+function newDay(){ return { date:todayStr(), entries:{}, tomb:{}, employees:[], withdraw:{}, grokk:{},
   fuel:'', gas:'', sackAdd:'', sackRet:'', sackCarry:0, sackDeductOn:false, sackDeduct:0, sendMethod:'โอนเข้าบัญชี' }; }
 function saveDay(){ save(LS.day(day.date), day); scheduleHeartbeat(); }
 
@@ -391,12 +392,14 @@ function saveEntry(){
   if (!total && !paidDebt){ deleteEntry(); return; }
   if (editKey && editKey!==name) delete day.entries[editKey];
   var noSack = $('mNoSack').checked;
-  day.entries[name] = { items:items, total:total, paid:paid, paidDebt:paidDebt, owed:Math.max(0,total-paid), payment:payMode, noSack:noSack };
+  // ts = เวลาที่แก้ล่าสุด ใช้ตัดสินตอน merge กับเครื่องบัดดี้ (ใครแก้ทีหลังชนะ)
+  day.entries[name] = { items:items, total:total, paid:paid, paidDebt:paidDebt, owed:Math.max(0,total-paid), payment:payMode, noSack:noSack, ts:Date.now() };
+  delete day.tomb[name];
   if (noSack) noSackPrefs[name]=true; else delete noSackPrefs[name];  // จำต่อลูกค้าในเครื่อง
   save(LS.nosack, noSackPrefs);
   saveDay(); closeEntry(); renderCustomers(); renderChallenge();
 }
-function deleteEntry(){ if (editKey){ delete day.entries[editKey]; saveDay(); } closeEntry(); renderCustomers(); renderChallenge(); }
+function deleteEntry(){ if (editKey){ day.tomb[editKey]=Date.now(); delete day.entries[editKey]; saveDay(); } closeEntry(); renderCustomers(); renderChallenge(); }
 
 // ================= close / summary =================
 function totals(){
@@ -481,22 +484,58 @@ function loadSackRet(){
     saveDay(); renderSummary();
   }).catch(function(){});  // offline ใช้ค่าที่ดึงไว้ล่าสุด
 }
+// ยอดขายย้อนหลังของสาย (รวมทุกเครื่อง) — ไว้ดูว่าวันก่อนๆ ขายอะไรไปเท่าไร จะได้เอาของขึ้นรถพอดี
+function loadHistory(){
+  apiGet('daylog',{ line:session.line, days:3 }).then(function(j){
+    if (!j.ok) throw j.error;
+    if (!j.days.length){ $('histBox').innerHTML='<p class="note">ยังไม่มีข้อมูลย้อนหลัง (เริ่มเก็บตั้งแต่วันนี้)</p>'; return; }
+    var rows = '<tr><th>สินค้า</th>'+ j.days.map(function(d){ return '<th>'+d.date+'</th>'; }).join('') +'</tr>';
+    master.products.forEach(function(p){
+      if (!j.days.some(function(d){ return d.sold[p.id]; })) return;   // สินค้าที่ไม่ได้ขายเลย ไม่ต้องรก
+      rows += '<tr><td>'+p.name+'</td>'+ j.days.map(function(d){ return '<td>'+fmt(d.sold[p.id]||0)+'</td>'; }).join('') +'</tr>';
+    });
+    rows += '<tr><td>ลูกค้า</td>'+ j.days.map(function(d){ return '<td>'+fmt(d.customers)+'</td>'; }).join('') +'</tr>';
+    $('histBox').innerHTML = '<table class="mini">'+rows+'</table>';
+  }).catch(function(){ $('histBox').innerHTML='<p class="note">ดึงไม่ได้ (ไม่มีสัญญาณ?)</p>'; });
+}
 // รีเฟรชเบิก+คืนกระสอบทุก 1 นาทีระหว่างเปิดหน้าปิดวัน
 setInterval(function(){
   if (session && session.role==='employee' && $('scr-close').classList.contains('active')){ loadWithdraw(); loadSackRet(); }
 }, 60000);
 
-// ================= heartbeat (near-real-time) =================
+// ================= heartbeat + แชร์การขายกับเครื่องบัดดี้ =================
+// ส่งรายบิลของเครื่องนี้ขึ้นไป แล้วรับก้อนที่รวมของทั้งสายกลับมา merge — สองเครื่องในสายเดียวกันจึงเห็นเหมือนกัน
 var hbTimer = null;
 function scheduleHeartbeat(){ if (session && session.role==='employee'){ clearTimeout(hbTimer); hbTimer=setTimeout(sendHeartbeat, 8000); } }
 function sendHeartbeat(){
   if (!session || session.role!=='employee' || !navigator.onLine) return;
   var t = totals();
-  apiPost({ action:'heartbeat', line:session.line, employees:day.employees,
+  apiPost({ action:'syncday', date:day.date, line:session.line, employees:day.employees,
     customers:Object.keys(day.entries).length, cash:t.cash, owed:t.owed, moneySent:t.send,
-    sold:t.sold, status: day.closed ? 'closed' : 'running' }).catch(function(){});
+    sold:t.sold, status: day.closed ? 'closed' : 'running',
+    entries:day.entries, tomb:day.tomb }).then(applySync).catch(function(){});  // offline = เก็บไว้ในเครื่อง ส่งรอบหน้า
 }
-setInterval(sendHeartbeat, 180000); // ทุก 3 นาที
+// รับก้อนที่ server รวมแล้วมาผสานลงเครื่องนี้ — เทียบ ts รายลูกค้า ของที่แก้ทีหลังชนะ
+function applySync(j){
+  if (!j || !j.ok || !j.entries) return;
+  if ($('modal').classList.contains('open')) return;  // กำลังกรอกบิลอยู่ อย่าเปลี่ยนของใต้มือ (รอบหน้าค่อยผสาน)
+  var changed = false;
+  Object.keys(j.entries).forEach(function(n){
+    var v = j.entries[n], cur = day.entries[n];
+    if ((day.tomb[n]||0) > (v.ts||0)) return;                       // เครื่องนี้ลบทีหลัง
+    if (!cur || (cur.ts||0) < (v.ts||0)){ day.entries[n]=v; changed=true; }
+  });
+  Object.keys(j.tomb||{}).forEach(function(n){
+    var ts = j.tomb[n]||0;
+    if ((day.tomb[n]||0) < ts){ day.tomb[n]=ts; changed=true; }
+    if (day.entries[n] && (day.entries[n].ts||0) <= ts){ delete day.entries[n]; changed=true; }
+  });
+  if (!changed) return;
+  save(LS.day(day.date), day);   // ห้ามใช้ saveDay() — จะสั่ง heartbeat ต่อทันทีเป็นวงวน
+  renderCustomers(); renderChallenge();
+  if ($('scr-close').classList.contains('active')) renderSummary();
+}
+setInterval(sendHeartbeat, 180000); // ทุก 3 นาที (เปิดหน้าขาย/ปิดวัน หรือบันทึกบิล จะ sync ทันทีอยู่แล้ว)
 
 // ================= submit + queue =================
 function buildPayload(){
@@ -712,9 +751,14 @@ function renderCfg(){
   $('cfgDate').textContent=todayStr(); $('cfgCount').textContent=day?Object.keys(day.entries).length:0;
   renderThemePick(); renderCfgAvatar();
 }
+// ล้างแล้วต้องส่ง tombstone ขึ้นไปด้วย ไม่งั้น sync จะดึงบิลกลับมาจากเครื่องบัดดี้ทันที
+// → ผลคือล้างทั้งสาย (ทั้ง 2 เครื่อง) ปุ่มจึงต้องบอกให้ชัด · ยังไม่แตะรายงานที่ส่งเข้าชีตแล้ว
 function clearDay(btn){
-  arm(btn, 'แตะอีกครั้ง ยืนยันล้าง (เฉพาะเครื่องนี้)', function(){
-    day=newDay(); saveDay(); toast('ล้างข้อมูลขายในเครื่องแล้ว — ไม่กระทบ Google Sheet');
+  arm(btn, 'แตะอีกครั้ง ยืนยันล้าง (ทั้งสาย ทุกเครื่อง)', function(){
+    var t = Date.now(), tomb = {};
+    Object.keys(day.entries).forEach(function(n){ tomb[n]=t; });
+    day=newDay(); day.tomb=tomb; saveDay(); sendHeartbeat();
+    toast('ล้างข้อมูลขายวันนี้ของสายแล้ว — รายงานที่ส่งเข้าชีตไปแล้วไม่กระทบ');
     go('sell',$('nav').children[0]);
   });
 }
