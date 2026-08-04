@@ -804,12 +804,21 @@ function reportHTML(){
 // กลไกพิมพ์เวอร์ชัน 31 กค. — เปิดหน้าเอกสารแยก (popup ก่อน, iframe fallback ถ้าโดนบล็อก)
 // เนื้อรายงานใช้ reportHTML() ปัจจุบัน (มีหักค่ากระสอบ + ป้าย (ก้อน) ครบ)
 function printDoc(){
-  return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>รายงานขาย '+session.line+' '+day.date+'</title>'
+  return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">'
+    // 🔴 ขาดบรรทัดนี้ = มือถือเรนเดอร์หน้าที่ความกว้างสมมติ 980px แล้วย่อทั้งหน้าลงพอดีจอ
+    //    ตัวหนังสือ 10px เหลือ ~4px ปุ่มพิมพ์ก็จิ๋วตาม (อาการที่พนักงานแจ้ง 4 ส.ค. 2026)
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>รายงานขาย '+session.line+' '+day.date+'</title>'
     + '<style>@page{size:A4;margin:8mm}*{font-family:\'Sarabun\',\'Leelawadee UI\',sans-serif}body{color:#000;font-size:10px}'
     + 'h1{font-size:15px;margin:0}.sub{color:#444;margin-bottom:5px;font-size:10px}table{width:100%;border-collapse:collapse;margin-bottom:5px}'
     + 'th,td{border:1px solid #999;padding:1px 4px;text-align:right;line-height:1.25}th:first-child,td:first-child{text-align:left}'
     + '.cols{display:flex;gap:12px}.cols>div{flex:1}.sign{display:flex;gap:24px;margin-top:14px}'
     + '.sign div{flex:1;border-top:1px dotted #000;text-align:center;padding-top:4px;font-size:11px}.pbtn{margin:8px 0}'
+    // อ่านบนจอเท่านั้น — กระดาษที่พิมพ์ออกมาคุมด้วย @page + @media print เหมือนเดิมทุกตัว ห้ามย้ายกฎพวกนี้ออกนอก screen
+    + '@media screen{body{font-size:14px;margin:0;padding:10px 12px 40px}table{font-size:13px}th,td{padding:5px 6px}'
+    + 'h1{font-size:19px}.sub{font-size:13px}.cols{display:block}'   // จอแคบวางสองคอลัมน์ซ้อนกัน (พิมพ์ยังเป็น flex)
+    + '.pbtn{position:sticky;top:0;z-index:2;width:100%;padding:15px;font-size:17px;font-weight:700;'
+    + 'color:#fff;background:#B08D2E;border:0;border-radius:12px;margin:0 0 12px}}'
     + '@media print{.pbtn{display:none}body{font-size:9.5px}}</style></head><body>'
     + '<button class="pbtn" onclick="window.print()">🖨 พิมพ์ / บันทึกเป็น PDF</button>'
     + reportHTML() + '</body></html>';
