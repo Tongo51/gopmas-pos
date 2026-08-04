@@ -390,7 +390,8 @@ function saveEntry(){
   var items = collectItems(), total = entryTotal();
   var paid = payMode==='เงินสด' ? total : 0, paidDebt = Number($('mDebt').value)||0;
   if (!total && !paidDebt){ deleteEntry(); return; }
-  if (editKey && editKey!==name) delete day.entries[editKey];
+  // เปลี่ยนชื่อลูกค้า = ลบชื่อเดิม ต้องปัก tomb ด้วย ไม่งั้นเครื่องบัดดี้ส่งชื่อเดิมกลับมาเป็นแถวซ้ำ
+  if (editKey && editKey!==name){ delete day.entries[editKey]; day.tomb[editKey]=Date.now(); }
   var noSack = $('mNoSack').checked;
   // ts = เวลาที่แก้ล่าสุด ใช้ตัดสินตอน merge กับเครื่องบัดดี้ (ใครแก้ทีหลังชนะ)
   day.entries[name] = { items:items, total:total, paid:paid, paidDebt:paidDebt, owed:Math.max(0,total-paid), payment:payMode, noSack:noSack, ts:Date.now() };
