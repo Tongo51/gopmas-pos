@@ -168,6 +168,13 @@
   .soldbars .sb .t { height:6px; border-radius:99px; background:var(--cream); overflow:hidden; }
   .soldbars .sb .t i { display:block; height:100%; border-radius:99px; background:var(--gold-lite); }
   .soldbars .sb .q { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .sumtab .sr { display:grid; grid-template-columns:1fr 62px 62px 54px; gap:6px; align-items:center; font-size:13px;
+                padding:6px 0; border-top:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  .sumtab .sr span:not(:first-child) { text-align:right; }
+  .sumtab .sr.hd { border-top:0; font-size:11px; color:var(--muted); }
+  .sumtab .sr .q { font-weight:700; }
+  .sumtab .sr .o { color:var(--muted); }
+  .sumtab .sr .d.up { color:var(--green); } .sumtab .sr .d.down { color:var(--red); }
 
   /* ---------- nav ---------- */
   nav { position:fixed; bottom:0; left:0; right:0; z-index:10; display:flex; background:var(--card); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
@@ -339,6 +346,7 @@
         <div class="kpi"><div class="k">สายที่ยังวิ่ง</div><div class="v frost" id="monRunning">–</div></div>
       </div>
       <div class="row" style="margin-bottom:12px"><button class="btn btn-ghost" style="padding:8px" onclick="loadMonitor()">⟳ รีเฟรช</button><span class="note" id="monStatus" style="flex:2"></span></div>
+      <div id="monSold"></div>
       <div id="monList"></div>
     </section>
 

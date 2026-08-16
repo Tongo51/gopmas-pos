@@ -281,9 +281,9 @@ function renderChallenge(){
   var el = $('challenge'); if (!el) return;
   if (!ly || !ly.total){ el.innerHTML=''; return; }
   var now = totals().send, pct = ly.total ? Math.min(100, Math.round(now*100/ly.total)) : 0;
-  var pnames = { 'หลอดใหญ่':'หลอดใหญ่','หลอดเล็ก':'หลอดเล็ก','น้ำแข็งโม่':'โม่','ลูก':'ลูก','น้ำโหล':'น้ำโหล','น้ำถ้วย':'น้ำถ้วย' };
+  // คีย์ = product id (backend เปลี่ยนจากชื่อเป็น id แล้ว) แคชเก่าอาจยังเป็นชื่อ — ทั้งคู่อ่านออกอยู่แล้ว
   var chips = Object.keys(ly.products||{}).filter(function(k){ return ly.products[k]; })
-    .map(function(k){ return '<span>'+pnames[k]+' '+fmt(ly.products[k])+'</span>'; }).join('');
+    .map(function(k){ return '<span>'+k+' '+fmt(ly.products[k])+'</span>'; }).join('');
   el.innerHTML = '<div class="challenge"><div class="eb">วันนี้เมื่อปีที่แล้ว</div>'
     + '<div class="amt">'+fmt(ly.total)+' <small>บาท · '+(ly.date||'')+'</small></div>'
     + '<div class="prods">'+chips+'</div>'
@@ -610,9 +610,36 @@ function loadMonitor(){
     $('monTotal').textContent = fmt(j.total);
     $('monRunning').textContent = j.running+' / '+j.count;
     $('monStatus').textContent = 'อัปเดต '+ new Date().toLocaleTimeString('th-TH');
+    monSold = j.sold || {}; renderSoldSum();
     $('monList').innerHTML = j.lines.sort(function(a,b){ return a.line<b.line?-1:1; })
       .map(monCard).join('') || '<p class="note">ยังไม่มีสายที่เริ่มขายวันนี้</p>';
   }).catch(function(e){ $('monStatus').textContent='โหลดไม่ได้ ('+e+')'; });
+  loadLastYearAll();
+}
+// ยอดขายรายสินค้ารวมทุกสาย เทียบวันเดียวกันปีที่แล้ว (ปีที่แล้วนิ่งทั้งวัน → แคชไว้ ไม่ยิงซ้ำทุกนาที)
+var monSold = null, lyAll = null;
+function loadLastYearAll(){
+  var k = LS.lastyear+'.ALL.'+todayStr();
+  if (!lyAll) lyAll = load(k, null);
+  if (lyAll) return renderSoldSum();
+  apiGet('lastyear').then(function(j){ if (j.ok){ lyAll=j; save(k,j); renderSoldSum(); } }).catch(function(){});
+}
+function renderSoldSum(){
+  var el = $('monSold'); if (!el || !monSold) return;
+  var ly = (lyAll && lyAll.products) || {};
+  var keys = Object.keys(monSold).concat(Object.keys(ly))
+    .filter(function(k,i,a){ return a.indexOf(k)===i && (monSold[k] || ly[k]); })
+    .sort(function(a,b){ return (monSold[b]||0)-(monSold[a]||0); });
+  if (!keys.length){ el.innerHTML=''; return; }
+  el.innerHTML = '<div class="card sumtab"><h2>ยอดขายรวมวันนี้ · ทุกสาย</h2>'
+    + '<div class="sr hd"><span>สินค้า</span><span>วันนี้</span><span>ปีที่แล้ว</span><span>เทียบ</span></div>'
+    + keys.map(function(k){
+        var n = monSold[k]||0, o = ly[k]||0, d = o ? Math.round((n-o)*100/o) : null;
+        return '<div class="sr"><span>'+k+'</span><span class="q">'+fmt(n)+'</span>'
+          + '<span class="o">'+(o?fmt(o):'–')+'</span>'
+          + '<span class="d '+(d==null?'':(d>=0?'up':'down'))+'">'+(d==null?'–':(d>0?'+':'')+d+'%')+'</span></div>';
+      }).join('')
+    + '<p class="note">ปีที่แล้ว = '+((lyAll&&lyAll.date)||'—')+' · ซองไม่มีคอลัมน์ในฐานข้อมูลกลาง จึงไม่มียอดปีที่แล้ว</p></div>';
 }
 function monCard(l){
   if (l.status==='nodata')
