@@ -344,10 +344,12 @@ function openEntry(name){
   setPay(e? e.payment : 'เงินสด');  // จ่ายมาจริงคำนวณอัตโนมัติใน renderEntryTotal
   $('modal').classList.add('open');
 }
-// แสดงแถวเฉพาะเมื่อบิลนี้มีน้ำแข็งซอง หรือถูกตั้งไม่ใช้กระสอบไว้ (จะได้เห็น/ยกเลิกได้)
+// แสดงแถวเมื่อลูกค้ามีซองเป็นของประจำ หรือใส่จำนวนซองในบิลนี้ หรือเคยติ๊กไว้
+// เดิมต้องใส่จำนวนซองก่อนแถวถึงโผล่ ลูกค้าที่ยังไม่เคยติ๊กจึงดูเหมือนไม่มีช่องให้ติ๊ก
 function updateNoSackRow(){
   var el = $('q-ซอง'); var qty = el ? (Number(el.value)||0) : 0;
-  $('mNoSackRow').style.display = (qty>0 || $('mNoSack').checked) ? 'flex' : 'none';
+  var isUsual = !!(el && el.closest('#mUsual'));
+  $('mNoSackRow').style.display = (isUsual || qty>0 || $('mNoSack').checked) ? 'flex' : 'none';
 }
 function prodRow(id, e, usual){
   var p = productById(id); if (!p) return '';
