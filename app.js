@@ -30,6 +30,7 @@ var session = load(LS.session, null);
 var master = load(LS.master, { products:[], customers:[], roster:[] });
 var roster = load(LS.roster, { employees:[], lines:[] });
 var noSackPrefs = load(LS.nosack, {}); // จำต่อลูกค้าในเครื่อง: ลูกค้าที่ซื้อซองเป็นก้อน (ไม่ใช้กระสอบ)
+var vehicles = load('pos.vehicles', []);  // รถจากสมุดประจำรถ TSM [{plate,name,line,lastKm}] — cache ไว้ใช้ตอน offline
 var day = null;
 var editKey = null, payMode = 'เงินสด', modalCust = null;
 var pendingLogin = null, selectedLine = null, pinBuf = '';
@@ -243,7 +244,7 @@ function go(id, btn){
   Array.prototype.forEach.call($('nav').children, function(b){ b.classList.remove('on'); });
   if (btn) btn.classList.add('on');
   if (id==='sell'){ renderChallenge(); renderCustomers(); sendHeartbeat(); }  // sync กับเครื่องบัดดี้ทันทีที่เปิดหน้า
-  if (id==='close'){ renderSummary(); loadWithdraw(); loadSackRet(); sendHeartbeat(); loadHistory(); }
+  if (id==='close'){ renderSummary(); loadVehicles(); loadWithdraw(); loadSackRet(); sendHeartbeat(); loadHistory(); }
   if (id==='monitor') loadMonitor();
   if (id==='products') loadProducts();
   if (id==='lines'){ renderLineProducts(); loadSackDeductAdmin(); }
@@ -270,7 +271,7 @@ function refreshMaster(silent){
 // ================= day state =================
 // tomb = บิลที่ลบไปแล้ว {ชื่อลูกค้า:เวลา} — ต้องเก็บไว้ ไม่งั้น sync จะดึงบิลที่ลบแล้วกลับมาจากเครื่องบัดดี้
 function newDay(){ return { date:todayStr(), entries:{}, tomb:{}, employees:[], withdraw:{}, grokk:{},
-  fuel:'', gas:'', sackAdd:'', sackRet:'', sackCarry:0, sackDeductOn:false, sackDeduct:0, sendMethod:'โอนเข้าบัญชี' }; }
+  fuel:'', gas:'', liters:'', plate:'', startKm:'', endKm:'', sackAdd:'', sackRet:'', sackCarry:0, sackDeductOn:false, sackDeduct:0, sendMethod:'โอนเข้าบัญชี' }; }
 function saveDay(){ save(LS.day(day.date), day); scheduleHeartbeat(); }
 
 // ================= sell: challenge =================
@@ -462,6 +463,54 @@ function renderSummary(){
   $('inFuel').value=day.fuel; $('inGas').value=day.gas; $('inSackAdd').value=day.sackAdd; $('inSackRet').value=day.sackRet;
   showEl('amendBtn', !!day.closed);
   setSendMethod(day.sendMethod||'โอนเข้าบัญชี');
+  renderVehicle();
+}
+
+// ================= รถวันนี้ → สมุดประจำรถ TSM =================
+// รถประจำสายขึ้นให้อัตโนมัติ (ตั้งสายที่หน้าผู้ดูแลของ TSM) · สลับรถได้จาก dropdown · ส่งไป TSM พร้อมปิดวัน
+function vehOf(plate){ return vehicles.filter(function(v){ return v.plate===plate; })[0]; }
+function loadVehicles(){
+  apiGet('vehicles').then(function(j){
+    if (!j.ok) return;
+    vehicles = j.data; save('pos.vehicles', vehicles);
+    if ($('scr-close').classList.contains('active')) renderVehicle();
+  }).catch(function(){});
+}
+function renderVehicle(){
+  showEl('vehCard', vehicles.length>0);
+  if (!vehicles.length) return;
+  if (day.plate===undefined || day.plate===''){
+    var mine = vehicles.filter(function(v){ return v.line===session.line; })[0];
+    if (mine && !day.vehPicked){ day.plate = mine.plate; }
+  }
+  var v = vehOf(day.plate);
+  if (v && !day.startKm && v.lastKm) day.startKm = v.lastKm;
+  saveDay();
+  $('vehSel').innerHTML = '<option value="">— ไม่บันทึกรถ —</option>' + vehicles.map(function(x){
+    return '<option value="'+x.plate+'"'+(x.plate===day.plate?' selected':'')+'>'+x.plate+(x.line?' · สาย '+x.line:'')+(x.name?' · '+x.name:'')+'</option>';
+  }).join('');
+  $('inStartKm').value=day.startKm||''; $('inEndKm').value=day.endKm||''; $('inLiters').value=day.liters||'';
+  showEl('vehFields', !!day.plate);
+  renderDist();
+}
+function renderDist(){
+  var d = (Number(day.endKm)||0) - (Number(day.startKm)||0);
+  $('vehDist').textContent = day.startKm && day.endKm ? fmt(d)+' กม.' : '–';
+  $('vehDist').style.color = d<0 ? 'var(--red)' : '';
+}
+function setPlate(p){
+  day.plate = p; day.vehPicked = true;
+  var v = vehOf(p); day.startKm = v && v.lastKm ? v.lastKm : '';
+  renderVehicle();
+}
+function setVeh(k, val){ day[k]=val; saveDay(); renderDist(); }
+// คืนข้อความเตือนถ้ากรอกไม่ครบ (ไม่บล็อกถ้าเลือก "ไม่บันทึกรถ")
+function vehicleProblem(){
+  if (!day.plate) return '';
+  if (!day.startKm || !day.endKm) return 'กรอกเลขไมล์ออกและไมล์กลับ';
+  if (Number(day.endKm) < Number(day.startKm)) return 'ไมล์กลับต้องไม่น้อยกว่าไมล์ออก';
+  if ((Number(day.fuel)||0)>0 && !(Number(day.liters)>0)) return 'กรอกจำนวนลิตรน้ำมันที่เติม';
+  return '';
 }
 function setGrokk(pid, v){ day.grokk[pid]=v; saveDay(); }
 function toggleEmp(name){ var i=day.employees.indexOf(name); if(i>=0)day.employees.splice(i,1); else day.employees.push(name); saveDay(); renderSummary(); }
@@ -547,12 +596,14 @@ function buildPayload(){
     date:day.date, line:session.line, employees:day.employees,
     sold:t.sold, moneySent:t.send, fuelTotal:t.fuel+t.gas, cash:t.cash, owed:t.owed, debtPaid:t.debt,
     customers:Object.keys(day.entries).length, sendMethod:day.sendMethod,
+    plate:day.plate||'', startKm:day.startKm||'', endKm:day.endKm||'', fuel:t.fuel, gas:t.gas, liters:day.liters||'',
     sackAdd:Number(day.sackAdd)||0, sackRet:Number(day.sackRet)||0, sackDeduct:t.deduct };
     // ไม่ส่งรายบิลรายลูกค้า — หนี้บันทึกเป็นยอดรวมสาย/วันฝั่ง server, รายละเอียดอยู่ในใบ A4
 }
 function submitDay(btn){
   if (!day.employees.length){ toast('เลือกพนักงานที่ไปวันนี้ก่อน'); return; }
   if (!Object.keys(day.entries).length){ toast('ยังไม่มีรายการขาย'); return; }
+  var vp = vehicleProblem(); if (vp){ toast(vp); $('vehCard').scrollIntoView({behavior:'smooth', block:'center'}); return; }
   if (day.closed){ toast('ปิดวันนี้ส่งไปแล้ว — กด "แก้ไขรายงานที่ส่งแล้ว" ถ้าต้องแก้'); syncQueue(); return; }
   arm(btn, 'แตะอีกครั้ง · ยืนยันส่งเงิน '+fmt(totals().deposit)+' บาท', function(){
     var q = load(LS.queue,[]); q.push(buildPayload()); save(LS.queue,q);

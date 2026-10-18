@@ -304,6 +304,17 @@
         <div id="histBox"><p class="note">กำลังดึง…</p></div>
         <p class="hint">ยอดขายจริงของสายนี้ (รวมทุกเครื่องในสาย) · เก็บไว้ประมาณ 10 วันล่าสุด</p>
       </div>
+      <div class="card hidden" id="vehCard">
+        <h2>รถวันนี้ <small style="color:var(--muted);font-weight:400">· ส่งเข้าสมุดประจำรถ</small></h2>
+        <select id="vehSel" onchange="setPlate(this.value)"></select>
+        <div id="vehFields">
+          <div class="row"><div><label>ไมล์ออก</label><input type="number" min="0" step="any" id="inStartKm" inputmode="decimal" oninput="setVeh('startKm',this.value)"></div>
+            <div><label>ไมล์กลับ</label><input type="number" min="0" step="any" id="inEndKm" inputmode="decimal" oninput="setVeh('endKm',this.value)"></div></div>
+          <div class="totline"><span>ระยะทาง</span><b id="vehDist">–</b></div>
+          <label>น้ำมันที่เติม (ลิตร)</label><input type="number" min="0" step="any" id="inLiters" inputmode="decimal" oninput="setVeh('liters',this.value)">
+          <p class="hint">ไมล์ออกเติมให้จากไมล์ล่าสุดของรถ · ค่าน้ำมัน/แก๊ส (บาท) กรอกในการ์ด "เงิน"</p>
+        </div>
+      </div>
       <div class="card">
         <h2>เงิน</h2>
         <div class="totline"><span>ลูกค้าจ่าย</span><b id="tCash">0</b></div>
