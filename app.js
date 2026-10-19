@@ -234,6 +234,7 @@ function enterApp(){
     return '<button class="'+(i===0?'on':'')+'" onclick="go(\''+n[0]+'\',this)"><span class="ic">'+n[1]+'</span>'+n[2]+'</button>';
   }).join('');
   go(navs[0][0], $('nav').children[0]);
+  if (session.role==='employee') loadVehicles();  // ดึงรายการรถตั้งแต่เข้าแอป — ไม่ต้องรอเปิดหน้าปิดวัน (เคยปิดวันก่อนรายการรถโหลดเสร็จ → ไม่ได้ส่งรถ)
   renderChip(load(LS.queue,[]).length);
   loadAvatars();
   if (session.role==='employee'){ ensureMaster(); }
@@ -509,7 +510,10 @@ function vehicleProblem(){
   if (!day.plate) return '';
   if (!day.startKm || !day.endKm) return 'กรอกเลขไมล์ออกและไมล์กลับ';
   if (Number(day.endKm) < Number(day.startKm)) return 'ไมล์กลับต้องไม่น้อยกว่าไมล์ออก';
-  if ((Number(day.fuel)||0)>0 && !(Number(day.liters)>0)) return 'กรอกจำนวนลิตรน้ำมันที่เติม';
+  var fuel = Number(day.fuel)||0, liters = Number(day.liters)||0;
+  if (fuel>0 && !(liters>0)) return 'กรอกจำนวนลิตรน้ำมันที่เติม';
+  // กันกรอกบาทลงช่องลิตร (เจอจริง: 1700 บาท → 1700 ลิตร)
+  if (fuel>0 && (fuel/liters < 15 || fuel/liters > 80)) return 'น้ำมันตกลิตรละ '+fmt(Math.round(fuel/liters))+' บาท ผิดปกติ — ช่องลิตรต้องเป็นจำนวนลิตร ไม่ใช่บาท';
   return '';
 }
 function setGrokk(pid, v){ day.grokk[pid]=v; saveDay(); }
@@ -603,6 +607,8 @@ function buildPayload(){
 function submitDay(btn){
   if (!day.employees.length){ toast('เลือกพนักงานที่ไปวันนี้ก่อน'); return; }
   if (!Object.keys(day.entries).length){ toast('ยังไม่มีรายการขาย'); return; }
+  // ยังไม่เคยได้รายการรถเลย (เพิ่งเปิดแอป/เน็ตช้า) → ดึงก่อน 1 รอบ ไม่ให้ปิดวันหลุดไปโดยไม่มีรถ · กดซ้ำได้ถ้า TSM ล่ม
+  if (!vehicles.length && !submitDay.vehTried){ submitDay.vehTried = true; loadVehicles(); toast('กำลังดึงรายการรถ… รอสักครู่แล้วกดปิดวันอีกครั้ง'); return; }
   var vp = vehicleProblem(); if (vp){ toast(vp); $('vehCard').scrollIntoView({behavior:'smooth', block:'center'}); return; }
   if (day.closed){ toast('ปิดวันนี้ส่งไปแล้ว — กด "แก้ไขรายงานที่ส่งแล้ว" ถ้าต้องแก้'); syncQueue(); return; }
   arm(btn, 'แตะอีกครั้ง · ยืนยันส่งเงิน '+fmt(totals().deposit)+' บาท', function(){
