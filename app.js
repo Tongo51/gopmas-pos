@@ -104,8 +104,11 @@ function apiGet(action, params){
   for (var k in (params||{})) q += '&' + k + '=' + encodeURIComponent(params[k]);
   return fetch(cfg.url + q).then(function(r){ return r.json(); });
 }
-function apiPost(body){
-  return fetch(cfg.url, { method:'POST', body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+// ms = ตัดคำขอที่เงียบเกินเวลา — คำขอที่ค้างไม่จบ (เจอจริง L7 19–22 ต.ค.) ทำให้ syncQueue คิดว่ายังส่งอยู่ตลอด คิวไม่ขยับหลายวัน
+function apiPost(body, ms){
+  var ac = ms && window.AbortController ? new AbortController() : null;
+  if (ac) setTimeout(function(){ ac.abort(); }, ms);
+  return fetch(cfg.url, { method:'POST', body: JSON.stringify(body), signal: ac ? ac.signal : undefined }).then(function(r){ return r.json(); });
 }
 
 // ================= boot =================
@@ -636,7 +639,7 @@ function syncQueue(){
   return (function next(){
     var qq = load(LS.queue,[]);
     if (!qq.length){ syncing=false; $('submitNote').textContent='✓ ส่งรายงานเข้าชีตแล้ว'; renderChip(0); return; }
-    return apiPost(qq[0]).then(function(j){
+    return apiPost(qq[0], 90000).then(function(j){   // ส่งซ้ำหลัง timeout ปลอดภัย: server เขียนทับตาม วัน+สาย ทั้ง solddata/หนี้/TSM
       if (!j.ok && j.fatal){  // เช่น พนักงานซ้ำสาย — ห้าม retry ให้ผู้ใช้แก้แล้วส่งใหม่
         qq.shift(); save(LS.queue,qq); renderChip(qq.length);
         syncing=false;
@@ -648,7 +651,7 @@ function syncQueue(){
       if (!j.ok) throw j.error;
       if (j.warn) toast('ส่งสำเร็จ แต่: '+j.warn);
       qq.shift(); save(LS.queue,qq); renderChip(qq.length); return next();
-    }).catch(function(e){ syncing=false; $('submitNote').textContent='ยังส่งไม่สำเร็จ จะลองใหม่ ('+e+')'; });
+    }).catch(function(e){ syncing=false; $('submitNote').textContent='ยังส่งไม่สำเร็จ จะลองใหม่ ('+(e && e.name==='AbortError' ? 'รอนานเกินไป' : e)+')'; });
   })();
 }
 function renderChip(n){
@@ -705,8 +708,10 @@ function monCard(l){
     return '<div class="lineitem idle"><div class="h"><div class="badge">'+l.line+'</div>'
       +'<div class="who2"><b>—</b><small>ยังไม่มีข้อมูลวันนี้</small></div>'
       +'<span class="chip"><span class="dot"></span> ยังไม่เริ่ม</span></div></div>';
-  var fresh = l.status==='closed' ? 'offline' : (l.agoMin!=null && l.agoMin<=10 ? 'synced' : 'stale');
-  var stt = l.status==='closed' ? 'ปิดวันแล้ว' : (l.agoMin!=null ? l.agoMin+' นาที' : '—');
+  // pending = เครื่องกดปิดวันแล้ว แต่รายงานยังไม่ถึงชีตกลาง (ค้างในคิวของเครื่อง) — ให้พนักงานเปิดแอปใหม่ตอนมีเน็ต
+  var unsent = l.status==='pending';
+  var fresh = unsent ? 'unsent' : l.status==='closed' ? 'offline' : (l.agoMin!=null && l.agoMin<=10 ? 'synced' : 'stale');
+  var stt = unsent ? 'ปิดแล้ว · ยังส่งไม่ถึง' : l.status==='closed' ? 'ปิดวันแล้ว' : (l.agoMin!=null ? l.agoMin+' นาที' : '—');
   var emps = String(l.employees||'').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
   var avs = emps.length ? '<span class="avs">'+emps.slice(0,3).map(function(n){ return avatarHTML(n,'av2'); }).join('')+'</span>' : '';
   // progress ลูกค้า: มีตัวหาร (ลูกค้าประจำของสาย) → bar เต็มรูปแบบ
@@ -730,9 +735,9 @@ function monCard(l){
   return '<div class="lineitem"><div class="h"><div class="badge">'+l.line+'</div>'
     +'<div class="who2"><b>'+(l.employees||'—')+'</b>'+(small?'<small>'+small+'</small>':'')+'</div>'
     +avs
-    +'<span class="chip '+(fresh==='synced'?'ok':(fresh==='stale'?'wait':''))+'"><span class="dot"></span> '+stt+'</span></div>'
+    +'<span class="chip '+(fresh==='synced'?'ok':(fresh==='stale'?'wait':(unsent?'bad':'')))+'"><span class="dot"></span> '+stt+'</span></div>'
     +prog+bars
-    +'<div class="foot"><span class="'+fresh+'">'+(l.status==='closed'?'ส่งรายงานแล้ว ✓':'ค้างใหม่ '+fmt(l.owed))+'</span>'
+    +'<div class="foot"><span class="'+fresh+'">'+(unsent?'⚠ รายงานค้างในเครื่อง':l.status==='closed'?'ส่งรายงานแล้ว ✓':'ค้างใหม่ '+fmt(l.owed))+'</span>'
     +'<span class="money">'+fmt(l.moneySent)+'</span></div></div>';
 }
 setInterval(function(){ if ($('scr-monitor').classList.contains('active')) loadMonitor(); }, 60000);
